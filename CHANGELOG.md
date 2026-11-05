@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Register webview message handlers before the review UI loads, so the first requests are never lost.
+- Remember the chosen main file when a paper is reopened.
+
 ## 0.1.0
 
 - First VS Code release.

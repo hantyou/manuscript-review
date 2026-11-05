@@ -100,7 +100,6 @@ async function openReview(context, paperDir, main) {
     },
   );
   panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "media", "icon.png");
-  panel.webview.html = renderReviewHtml(panel.webview, context.extensionUri, APP);
 
   const state = { proj, session, srv };
   panels.set(key, panel);
@@ -135,6 +134,8 @@ async function openReview(context, paperDir, main) {
     session.off("event", forward);
     await closeProject(state);
   });
+
+  panel.webview.html = renderReviewHtml(panel.webview, context.extensionUri, APP);
 }
 
 async function closeAll() {

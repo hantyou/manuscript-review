@@ -2,14 +2,28 @@
   "name": "manuscript-review",
   "displayName": "Manuscript Review",
   "description": "Review revisions to a LaTeX manuscript side by side, discuss passages with an AI agent, and apply only the wording you choose.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "hantyou",
   "license": "MIT",
   "icon": "media/icon.png",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Other"],
-  "keywords": ["latex", "manuscript", "review", "diff", "proofreading", "git", "writing"],
-  "extensionKind": ["workspace"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "latex",
+    "manuscript",
+    "review",
+    "diff",
+    "proofreading",
+    "git",
+    "writing"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
   "main": "./extension/extension.js",
   "activationEvents": [
     "onCommand:manuscriptReview.open",
@@ -20,25 +34,63 @@
   ],
   "contributes": {
     "commands": [
-      { "command": "manuscriptReview.open", "title": "Open Paper", "category": "Manuscript Review" },
-      { "command": "manuscriptReview.openFolder", "title": "Open Folder as Paper", "category": "Manuscript Review" },
-      { "command": "manuscriptReview.openCurrent", "title": "Open Current Paper", "category": "Manuscript Review" },
-      { "command": "manuscriptReview.reopenLast", "title": "Reopen Last Paper", "category": "Manuscript Review" },
-      { "command": "manuscriptReview.doctor", "title": "Check Environment", "category": "Manuscript Review" }
+      {
+        "command": "manuscriptReview.open",
+        "title": "Open Paper",
+        "category": "Manuscript Review"
+      },
+      {
+        "command": "manuscriptReview.openFolder",
+        "title": "Open Folder as Paper",
+        "category": "Manuscript Review"
+      },
+      {
+        "command": "manuscriptReview.openCurrent",
+        "title": "Open Current Paper",
+        "category": "Manuscript Review"
+      },
+      {
+        "command": "manuscriptReview.reopenLast",
+        "title": "Reopen Last Paper",
+        "category": "Manuscript Review"
+      },
+      {
+        "command": "manuscriptReview.doctor",
+        "title": "Check Environment",
+        "category": "Manuscript Review"
+      }
     ],
     "menus": {
       "commandPalette": [
-        { "command": "manuscriptReview.open" },
-        { "command": "manuscriptReview.openFolder" },
-        { "command": "manuscriptReview.openCurrent" },
-        { "command": "manuscriptReview.reopenLast" },
-        { "command": "manuscriptReview.doctor" }
+        {
+          "command": "manuscriptReview.open"
+        },
+        {
+          "command": "manuscriptReview.openFolder"
+        },
+        {
+          "command": "manuscriptReview.openCurrent"
+        },
+        {
+          "command": "manuscriptReview.reopenLast"
+        },
+        {
+          "command": "manuscriptReview.doctor"
+        }
       ],
       "explorer/context": [
-        { "command": "manuscriptReview.openCurrent", "when": "resourceExtname == .tex || explorerResourceIsFolder", "group": "navigation" }
+        {
+          "command": "manuscriptReview.openCurrent",
+          "when": "resourceExtname == .tex || explorerResourceIsFolder",
+          "group": "navigation"
+        }
       ],
       "editor/title": [
-        { "command": "manuscriptReview.openCurrent", "when": "resourceExtname == .tex", "group": "navigation" }
+        {
+          "command": "manuscriptReview.openCurrent",
+          "when": "resourceExtname == .tex",
+          "group": "navigation"
+        }
       ]
     },
     "configuration": {
@@ -63,11 +115,18 @@
     "package": "npx --yes @vscode/vsce package",
     "publish": "npx --yes @vscode/vsce publish"
   },
-  "repository": { "type": "git", "url": "https://github.com/hantyou/manuscript-review.git" },
-  "bugs": { "url": "https://github.com/hantyou/manuscript-review/issues" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hantyou/manuscript-review.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hantyou/manuscript-review/issues"
+  },
   "homepage": "https://github.com/hantyou/manuscript-review#readme",
   "capabilities": {
-    "untrustedWorkspaces": { "supported": false },
+    "untrustedWorkspaces": {
+      "supported": false
+    },
     "virtualWorkspaces": false
   }
 }
