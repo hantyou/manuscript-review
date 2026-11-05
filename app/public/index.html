@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manuscript review</title>
+<link rel="stylesheet" href="/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="/styles.css">
+<script src="/vendor/katex/katex.min.js" defer></script>
+</head>
+<body>
+<header class="appbar">
+  <button class="icon-btn" id="btnMenu" title="Outline" aria-label="Toggle outline"></button>
+  <div class="app-title"><b id="paperName">Manuscript review</b><span id="baselinePill" class="sub"></span></div>
+  <div class="progress" title="Units with a decision"><div class="bar"><span id="progFill"></span></div><span id="progText"></span></div>
+  <div class="seg" role="group" aria-label="Reading mode">
+    <button data-mode="compare" title="Show original and proposed wording side by side">Compare</button>
+    <button data-mode="final" title="Read the article with the wording as chosen so far">Read result</button>
+  </div>
+  <span class="spacer"></span>
+  <label class="chip-toggle" title="Show only paragraphs that contain a change"><input type="checkbox" id="changesOnly"><span>Changes only</span></label>
+  <label class="chip-toggle" title="Hide word-level highlighting"><input type="checkbox" id="hideHl"><span>Plain</span></label>
+  <label class="chip-toggle" title="Show LaTeX source instead of the readable view"><input type="checkbox" id="srcMode"><span>LaTeX</span></label>
+  <button class="icon-btn" id="btnTheme" title="Theme"></button>
+  <button class="icon-btn" id="btnPreview" title="PDF previews"></button>
+  <button class="icon-btn" id="btnState" title="Review state, instructions"></button>
+  <button class="btn filled" id="btnApply">Apply reviewed changes</button>
+  <button class="icon-btn" id="btnAi" title="AI panel"></button>
+  <span id="saveStatus" class="save" role="status">Loading…</span>
+</header>
+<div class="layout">
+  <nav id="drawer" aria-label="Outline">
+    <div class="d-tools">
+      <label class="field"><span class="ic-slot" id="icSearch"></span><input id="search" type="search" placeholder="Search wording" aria-label="Search wording"></label>
+      <div id="filters" class="chips"></div>
+      <div class="row"><button class="btn tonal sm" id="prevPending"></button><button class="btn tonal sm" id="nextPending"></button></div>
+    </div>
+    <div id="outline"></div>
+  </nav>
+  <main id="article" tabindex="-1"><div id="doc"></div></main>
+  <aside id="ai" aria-label="AI panel"></aside>
+</div>
+<div id="snack" class="snack" hidden></div>
+<div id="pop" class="pop" hidden></div>
+<div id="modal" class="scrim" hidden><div class="dialog" role="dialog" aria-modal="true"><div id="modalBody"></div></div></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

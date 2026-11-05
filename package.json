@@ -1,0 +1,73 @@
+{
+  "name": "manuscript-review",
+  "displayName": "Manuscript Review",
+  "description": "Review revisions to a LaTeX manuscript side by side, discuss passages with an AI agent, and apply only the wording you choose.",
+  "version": "0.1.0",
+  "publisher": "hantyou",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "keywords": ["latex", "manuscript", "review", "diff", "proofreading", "git", "writing"],
+  "extensionKind": ["workspace"],
+  "main": "./extension/extension.js",
+  "activationEvents": [
+    "onCommand:manuscriptReview.open",
+    "onCommand:manuscriptReview.openFolder",
+    "onCommand:manuscriptReview.openCurrent",
+    "onCommand:manuscriptReview.reopenLast",
+    "onCommand:manuscriptReview.doctor"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "manuscriptReview.open", "title": "Open Paper", "category": "Manuscript Review" },
+      { "command": "manuscriptReview.openFolder", "title": "Open Folder as Paper", "category": "Manuscript Review" },
+      { "command": "manuscriptReview.openCurrent", "title": "Open Current Paper", "category": "Manuscript Review" },
+      { "command": "manuscriptReview.reopenLast", "title": "Reopen Last Paper", "category": "Manuscript Review" },
+      { "command": "manuscriptReview.doctor", "title": "Check Environment", "category": "Manuscript Review" }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "manuscriptReview.open" },
+        { "command": "manuscriptReview.openFolder" },
+        { "command": "manuscriptReview.openCurrent" },
+        { "command": "manuscriptReview.reopenLast" },
+        { "command": "manuscriptReview.doctor" }
+      ],
+      "explorer/context": [
+        { "command": "manuscriptReview.openCurrent", "when": "resourceExtname == .tex || explorerResourceIsFolder", "group": "navigation" }
+      ],
+      "editor/title": [
+        { "command": "manuscriptReview.openCurrent", "when": "resourceExtname == .tex", "group": "navigation" }
+      ]
+    },
+    "configuration": {
+      "title": "Manuscript Review",
+      "properties": {
+        "manuscriptReview.papersSubfolder": {
+          "type": "string",
+          "default": "Papers",
+          "description": "Subfolder of the workspace that contains one folder per paper. Leave empty when the workspace root itself is a paper."
+        },
+        "manuscriptReview.profilesFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Optional folder with <paper-name>.md writing instructions. Relative paths are resolved against the paper folder. Empty uses the tool's config folder."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test app/tests/tex.test.mjs",
+    "check": "node --check extension/extension.js && node --check extension/review-panel.js && node --check extension/html.js",
+    "package": "npx --yes @vscode/vsce package",
+    "publish": "npx --yes @vscode/vsce publish"
+  },
+  "repository": { "type": "git", "url": "https://github.com/hantyou/manuscript-review.git" },
+  "bugs": { "url": "https://github.com/hantyou/manuscript-review/issues" },
+  "homepage": "https://github.com/hantyou/manuscript-review#readme",
+  "capabilities": {
+    "untrustedWorkspaces": { "supported": false },
+    "virtualWorkspaces": false
+  }
+}

@@ -1,0 +1,14 @@
+.git/**
+.github/**
+.vscode/**
+.gitignore
+.vscodeignore
+node_modules/**
+app/tests/**
+docs/**
+profiles/**
+skill/**
+*.vsix
+*.bundle
+.DS_Store
+Thumbs.db
