@@ -77,7 +77,33 @@ async function loadProject() {
   const b = P.baseline; $("#baselinePill").textContent = b.short ? `Git baseline ${b.short}${b.moved ? " · HEAD moved" : ""}` : "No Git baseline";
   $("#baselinePill").title = b.hash ? `${b.hash}\n${b.subject}\nFrozen ${b.frozenAt}` : "";
   if (P.note) toast(P.note);
-  renderProgress();
+  renderProgress(); renderAuthorControls();
+}
+const authorLabel = (a) => (a.name && a.name !== a.id ? `${a.name} (${a.id})` : a.id);
+function authorOptions(current) {
+  const list = P?.changesAuthors || [];
+  const opts = [`<option value=""${current ? "" : " selected"}>Default (no author id)</option>`];
+  for (const a of list) opts.push(`<option value="${esc(a.id)}"${a.id === current ? " selected" : ""}>${esc(authorLabel(a))}</option>`);
+  if (current && !list.some((a) => a.id === current)) opts.push(`<option value="${esc(current)}" selected>${esc(current)}</option>`);
+  return opts.join("");
+}
+function renderAuthorControls() {
+  const host = $("#authorPick"); if (!host) return;
+  const show = !!(P && P.changesPackage);
+  host.hidden = !show;
+  if (!show) return;
+  const top = $("#changesAuthorTop");
+  if (top) { top.innerHTML = authorOptions(P.changesAuthor || ""); top.value = P.changesAuthor || ""; }
+}
+async function setChangesAuthor(id) {
+  try {
+    const settings = await api("PUT", "/settings", { changesAuthor: id });
+    P.settings = settings; P.changesAuthor = settings.changesAuthor || "";
+    renderAuthorControls();
+    const sel = $("#changesAuthorState");
+    if (sel) { sel.innerHTML = authorOptions(P.changesAuthor); sel.value = P.changesAuthor; }
+    toast(P.changesAuthor ? `Tracked-changes author: ${P.changesAuthor}` : "Tracked-changes author: default");
+  } catch (e) { toast(e.message); }
 }
 function renderProgress() { const c = P.counts; const done = c.decided + c.applied; $("#progFill").style.width = c.total ? (100 * done) / c.total + "%" : "0"; $("#progText").textContent = `${done} of ${c.total} decided`; }
 async function loadAgents(refresh) { agentsInfo = await api("GET", "/agents" + (refresh ? "?refresh=1" : "")); }
@@ -274,6 +300,9 @@ function stepPending(dir) {
 }
 
 // ---------- delegated events ----------
+document.addEventListener("change", async (e) => {
+  if (e.target.id === "changesAuthorTop" || e.target.id === "changesAuthorState") await setChangesAuthor(e.target.value);
+});
 document.addEventListener("input", (e) => {
   const t = e.target;
   if (t.matches?.("textarea[data-edit]")) {
@@ -406,7 +435,9 @@ function renderPreviewModal(onlyIfOpen) {
 }
 async function poll(id) { const j = await api("GET", `/build/${id}`); jobs[id] = j; if (j.status === "running") setTimeout(() => poll(id), 2000); else renderPreviewModal(true); }
 function openState() {
-  openModal(`<h2>Review state</h2><p class="small muted">Review state lives in the tool's own folder, outside the paper. Export it to move a review to another machine.</p>
+  openModal(`<h2>Review state</h2>
+    ${P.changesPackage ? `<p class="rowf" style="flex-wrap:wrap;gap:8px;align-items:flex-end"><label class="field" style="min-width:260px"><span>Tracked-changes author</span><select id="changesAuthorState" class="sel">${authorOptions(P.changesAuthor)}</select></label><span class="small muted">Defined by <code>\\definechangesauthor</code> in the paper.</span></p>` : ""}
+    <p class="small muted">Review state lives in the tool's own folder, outside the paper. Export it to move a review to another machine.</p>
     <p class="rowf" style="flex-wrap:wrap;gap:12px"><button class="btn tonal" id="btnExport">Export review state</button><label class="btn tonal">Import<input type="file" id="importFile" accept=".json" hidden></label><label class="small"><input type="checkbox" id="importReplace"> replace existing decisions</label></p>
     <p class="rowf" style="flex-wrap:wrap;gap:12px"><button class="btn tonal" id="btnInstr">Writing instructions…</button><button class="btn tonal" id="btnRebase" ${P.baseline.moved ? "" : "disabled"} title="Freeze a new baseline at the current Git HEAD">Re-freeze baseline at HEAD</button></p>
     <p class="small muted">Project ${esc(P.id)}. Snapshot: ${P.snapshot ? P.snapshot.files + " files, " + P.snapshot.ts : "none"}.</p><p><button class="btn text" data-act="close">Close</button></p>`);

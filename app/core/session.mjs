@@ -2,7 +2,7 @@
 import { promises as fs, existsSync } from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import { flatten, sentenceRanges, skipGroup, maskComments } from "../shared/tex.mjs";
+import { flatten, sentenceRanges, skipGroup, maskComments, collectChangesAuthors } from "../shared/tex.mjs";
 import { scanProject, locateManual, lf, sha1, sha256 } from "./scan.mjs";
 import { Baseline } from "./baseline.mjs";
 import { headCommit, commitInfo, isGitRepo } from "./git.mjs";
@@ -42,6 +42,10 @@ export class Session extends EventEmitter {
     this.baseline = await new Baseline(this.proj.dir, R.baseline.hash).load();
     this.instructions = await this._loadInstructions();
     await this.rescan(true);
+    const authors = collectChangesAuthors(this.scan);
+    const savedAuthor = this.R.settings?.changesAuthor;
+    if (savedAuthor !== undefined) this.changesAuthor = String(savedAuthor || "").trim();
+    else if (!this.changesAuthor && authors.length) this.changesAuthor = authors[0].id;
     this.review.flush(); this.chats.flush();
     return this;
   }
@@ -214,12 +218,15 @@ export class Session extends EventEmitter {
   project() {
     const counts = { total: 0, pending: 0, decided: 0, stale: 0, applied: 0, detached: 0 };
     for (const u of Object.values(this.R.units)) { counts.total++; counts[M.statusOf(u)]++; }
+    const authors = collectChangesAuthors(this.scan);
+    if (this.changesAuthor && !authors.some((a) => a.id === this.changesAuthor)) authors.push({ id: this.changesAuthor, name: this.changesAuthor, color: "" });
     return {
       id: this.proj.id, name: this.proj.name, dir: this.proj.dir, main: this.proj.mainRel, note: this.proj.note,
       baseline: { ...this.baselineInfo, headNow: this.headNow, moved: !!this.headNow && this.headNow !== this.baselineInfo.hash },
       snapshot: this.R.snapshot ? { id: this.R.snapshot.id, ts: this.R.snapshot.ts, files: Object.keys(this.R.snapshot.files).length } : null,
       files: [...this.scan.files.keys()], headings: this.scan.headings.map((h) => ({ idx: h.idx, level: h.level, title: h.title })),
       counts, settings: this.R.settings, macros: this.scan.macros, saved: { at: this.review.savedAt, error: this.review.error },
+      changesPackage: B.detectChangesPackage(this.scan), changesAuthor: this.changesAuthor, changesAuthors: authors,
       cleanSwitch: !!(B.detectCleanSwitch(this.scan) || B.detectChangesPackage(this.scan)), instructions: this.instructions,
     };
   }
@@ -327,7 +334,13 @@ export class Session extends EventEmitter {
 
   // ---------- AI ----------
   agentSettings() { return this.R.settings; }
-  setSettings(patch) { Object.assign(this.R.settings, patch); this.save(); return this.R.settings; }
+  setSettings(patch) {
+    if (Object.prototype.hasOwnProperty.call(patch, "changesAuthor")) {
+      this.changesAuthor = String(patch.changesAuthor || "").trim();
+      patch = { ...patch, changesAuthor: this.changesAuthor };
+    }
+    Object.assign(this.R.settings, patch); this.save(); return this.R.settings;
+  }
 
   thread(id) { return this.chats.data.threads[id] || []; }
 

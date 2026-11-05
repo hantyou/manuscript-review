@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { walk, flatten, maskComments, sentenceRanges, extractMacros, hasMarkup } from "../shared/tex.mjs";
+import { walk, flatten, maskComments, sentenceRanges, extractMacros, hasMarkup, extractChangesAuthors, collectChangesAuthors } from "../shared/tex.mjs";
 import { wordDiff } from "../shared/worddiff.mjs";
 import { applyEdits, replacementFor } from "../core/apply.mjs";
 import { detectChangesPackage } from "../core/build.mjs";
@@ -102,4 +102,22 @@ test("clean builds detect the changes package", () => {
   const no = { files: new Map([["main.tex", { text: "\\documentclass{article}" }]]) };
   assert.equal(detectChangesPackage(yes), true);
   assert.equal(detectChangesPackage(no), false);
+});
+
+test("changes authors are extracted from definechangesauthor", () => {
+  const s = String.raw`\definechangesauthor[name={Alice}, color=blue]{alice}
+\definechangesauthor[color=red]{bob}
+\definechangesauthor[name={Alice}, color=blue]{alice}`;
+  assert.deepEqual(extractChangesAuthors(s), [
+    { id: "alice", name: "Alice", color: "blue" },
+    { id: "bob", name: "", color: "red" },
+  ]);
+});
+
+test("changes authors are collected across scanned files", () => {
+  const scan = { files: new Map([
+    ["main.tex", { text: String.raw`\definechangesauthor[name={Alice}]{alice}` }],
+    ["extra.tex", { text: String.raw`\definechangesauthor[name={Bob}, color=green]{bob}` }],
+  ]) };
+  assert.deepEqual(collectChangesAuthors(scan).map((a) => a.id), ["alice", "bob"]);
 });

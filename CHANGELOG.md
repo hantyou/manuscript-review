@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Add a Reviewer selector to the review panel for switching the `changes` package author per paper.
+- Remember the selected author per paper; the settings value is only the default.
+
 ## 0.1.4
 
 - Use the LaTeX `changes` package for tracked output, including optional author IDs.

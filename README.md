@@ -72,9 +72,14 @@ commands:
 \definechangesauthor[name={Your Name}, color=blue]{yourid}
 ```
 
-Set `manuscriptReview.changesAuthor` to `yourid` (or use
-`MR_CHANGES_AUTHOR` / `--changes-author yourid` with the CLI). The tool then
-writes `\added[id=yourid]{...}`, `\deleted[id=yourid]{...}` and
+In the review panel, use the **Reviewer** selector in the top bar (or
+**State → Tracked-changes author**) to switch between the authors declared in
+the paper. The choice is remembered per paper, so you do not need to change a
+setting each time.
+
+`manuscriptReview.changesAuthor` is the default for a paper that has no saved
+choice. The CLI also accepts `MR_CHANGES_AUTHOR` / `--changes-author yourid`.
+The tool then writes `\added[id=yourid]{...}`, `\deleted[id=yourid]{...}` and
 `\replaced[id=yourid]{...}{...}`. With no author ID it omits the optional
 argument, which is also valid for the package.
 
@@ -88,7 +93,7 @@ so the clean build hides all tracked changes.
 |---|---|
 | `manuscriptReview.papersSubfolder` | Subfolder with one folder per paper. Default `Papers`. Leave empty when the workspace root itself is a paper. |
 | `manuscriptReview.profilesFolder` | Optional folder containing `<paper-name>.md` writing instructions for the AI. |
-| `manuscriptReview.changesAuthor` | Author ID from `\definechangesauthor` in the paper. Used in tracked output as `[id=...]`. Leave empty to omit the optional ID. |
+| `manuscriptReview.changesAuthor` | Default author ID from `\definechangesauthor`. The in-panel **Reviewer** selector overrides it per paper. Leave empty to omit the optional ID by default. |
 
 ## Where data lives
 

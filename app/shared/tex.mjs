@@ -199,6 +199,45 @@ export function hasMarkup(text) {
   return found;
 }
 
+
+/** Authors declared by the LaTeX changes package in one source file. */
+export function extractChangesAuthors(src) {
+  const m = maskComments(src);
+  const out = []; const seen = new Set();
+  const re = /\\definechangesauthor\b/g;
+  let mm;
+  while ((mm = re.exec(m))) {
+    let i = skipWs(m, mm.index + mm[0].length);
+    let opts = "";
+    if (m[i] === "[") {
+      const e = skipOptional(m, i);
+      if (e === i) continue;
+      opts = src.slice(i + 1, e - 1); i = skipWs(m, e);
+    }
+    if (m[i] !== "{") continue;
+    const e = skipGroup(m, i); if (e < 0) continue;
+    const id = src.slice(i + 1, e - 1).trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const grab = (key) => {
+      const r = new RegExp(`(?:^|,)\\s*${key}\\s*=\\s*(?:\\{([^}]*)\\}|([^,]*))`).exec(opts);
+      return (r?.[1] ?? r?.[2] ?? "").trim();
+    };
+    out.push({ id, name: grab("name"), color: grab("color") });
+  }
+  return out;
+}
+
+/** Authors declared across all files of a scan. */
+export function collectChangesAuthors(scan) {
+  const out = []; const seen = new Set();
+  for (const f of scan.files.values()) for (const a of extractChangesAuthors(f.text)) {
+    if (seen.has(a.id)) continue;
+    seen.add(a.id); out.push(a);
+  }
+  return out;
+}
+
 /** Whitespace-insensitive comparison key. */
 export function norm(s) { return s.replace(/\s+/g, " ").replace(/~/g, " ").replace(/\s+/g, " ").trim(); }
 export function loose(s) { return s.replace(/%[^\n]*/g, "").replace(/[\s~]+/g, "").replace(/\\(?:,|;|!|:|space)/g, ""); }

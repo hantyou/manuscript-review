@@ -2,7 +2,7 @@
   "name": "manuscript-review",
   "displayName": "Manuscript Review",
   "description": "Review revisions to a LaTeX manuscript side by side, discuss passages with an AI agent, and apply only the wording you choose.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "hantyou",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -109,7 +109,7 @@
         "manuscriptReview.changesAuthor": {
           "type": "string",
           "default": "",
-          "description": "Author ID for the LaTeX changes package, used when applying tracked changes. Define the same ID with \\definechangesauthor in the paper. Leave empty to omit the optional id."
+          "description": "Default author ID for the LaTeX changes package. The Reviewer selector in the review panel overrides it per paper. Define the ID with \\definechangesauthor in the paper."
         }
       }
     }
