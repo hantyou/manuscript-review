@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Remove maintainer-only publishing notes from the Marketplace README.
+
 ## 0.1.1
 
 - Register webview message handlers before the review UI loads, so the first requests are never lost.

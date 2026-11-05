@@ -103,23 +103,6 @@ node app/cli.mjs open <paper-folder>
 
 It serves the same interface on `127.0.0.1` and opens it in your browser.
 
-## Publishing
-
-The GitHub Actions workflow packages the extension on every `v*` tag, attaches
-the `.vsix` to a GitHub release, and publishes to the Marketplace when a
-`VSCE_PAT` secret is configured.
-
-Marketplace setup:
-
-1. Create a publisher at https://marketplace.visualstudio.com/manage.
-2. Replace `publisher` in `package.json` if your publisher ID is not `hantyou`.
-3. Create an Azure DevOps personal access token with **Marketplace: Manage**.
-4. Add it to the repository as the `VSCE_PAT` secret.
-5. Push a tag such as `v0.1.0`.
-
-Without `VSCE_PAT`, the workflow still builds and attaches the `.vsix` to the
-GitHub release.
-
 ## License
 
 MIT. See `LICENSE` and `THIRD_PARTY_NOTICES.md`. KaTeX is bundled under its MIT
