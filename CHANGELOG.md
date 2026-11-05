@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- Use the LaTeX `changes` package for tracked output, including optional author IDs.
+- Clean PDF builds pass the package `final` option, so a custom clean switch is no longer required.
+- Add the `changesAuthor` setting and `--changes-author` / `MR_CHANGES_AUTHOR`.
+
 ## 0.1.3
 
 - Collapse a change after choosing original or proposed wording.

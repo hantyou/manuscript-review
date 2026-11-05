@@ -19,6 +19,7 @@ export class Session extends EventEmitter {
   constructor(proj, opts = {}) {
     super();
     this.proj = proj; this.opts = opts;
+    this.changesAuthor = String(opts.changesAuthor || "").trim();
     this.review = new Persist(path.join(proj.stateDir, "review.json"), { version: 1, units: {}, manual: [], baseline: null, snapshot: null, settings: {} });
     this.chats = new Persist(path.join(proj.stateDir, "chats.json"), { threads: {}, project: [] });
     this.runs = new Map(); this.jobs = new Map(); this.matchCache = new Map();
@@ -219,7 +220,7 @@ export class Session extends EventEmitter {
       snapshot: this.R.snapshot ? { id: this.R.snapshot.id, ts: this.R.snapshot.ts, files: Object.keys(this.R.snapshot.files).length } : null,
       files: [...this.scan.files.keys()], headings: this.scan.headings.map((h) => ({ idx: h.idx, level: h.level, title: h.title })),
       counts, settings: this.R.settings, macros: this.scan.macros, saved: { at: this.review.savedAt, error: this.review.error },
-      cleanSwitch: B.detectCleanSwitch(this.scan), instructions: this.instructions,
+      cleanSwitch: !!(B.detectCleanSwitch(this.scan) || B.detectChangesPackage(this.scan)), instructions: this.instructions,
     };
   }
 
@@ -297,7 +298,8 @@ export class Session extends EventEmitter {
     M.syncUnits(probe, { units: fresh.units }, []);
     fresh.units.push(...manual);
     const matches = Object.fromEntries(Object.values(this.R.units).map((u) => [u.id, u.baselineMatch]));
-    const plan = buildPlan(this.R, fresh, matches, mode);
+    const author = B.detectChangesPackage(fresh) ? this.changesAuthor : "";
+    const plan = buildPlan(this.R, fresh, matches, mode, { changesAuthor: author });
     this._lastPlan = { plan, fresh };
     return plan;
   }
@@ -420,8 +422,9 @@ export class Session extends EventEmitter {
         const dir = await B.stage(this.proj, this.scan, overlay, name);
         const clean = view === "clean";
         const cs = B.detectCleanSwitch(this.scan);
-        if (clean && !cs) throw new Error("This paper has no clean-mode switch.");
-        const r = await B.compile(dir, this.proj.mainRel, { clean, cleanSwitch: cs, jobname: `review_${view}` });
+        const cf = B.detectChangesPackage(this.scan);
+        if (clean && !cs && !cf) throw new Error("This paper has no clean-mode switch. Load the changes package or define a clean switch.");
+        const r = await B.compile(dir, this.proj.mainRel, { clean, cleanSwitch: cs, changesFinal: cf, jobname: `review_${view}` });
         Object.assign(job, r, { status: r.ok ? "done" : "error", finishedAt: M.now(), dir });
         this._broadcast({ type: "build", id });
       } catch (e) { Object.assign(job, { status: "error", error: e.message }); this._broadcast({ type: "build", id }); }

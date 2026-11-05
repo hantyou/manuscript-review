@@ -54,10 +54,33 @@ locally.
 - **PDF previews**: tracked or clean, from the current files or with your
   decisions applied. Built in the tool's staging folder with `latexmk`.
 - **Apply reviewed changes**: preview the patch, choose clean or tracked output,
-  apply. A checkpoint is saved first and can be undone.
+  apply. A checkpoint is saved first and can be undone. Tracked output uses the
+  LaTeX `changes` package commands `\added`, `\deleted` and `\replaced`;
+  clean PDF builds pass the package's `final` option.
 
 Keyboard: `j` / `k` or `Alt+↓` / `Alt+↑` next or previous pending change,
 `/` search, `Esc` closes dialogs.
+
+### Using the LaTeX changes package
+
+The tracked output is meant for the [changes](https://ctan.org/pkg/changes)
+package. Add it to the paper and remove any custom definitions of these
+commands:
+
+```latex
+\usepackage{changes}
+\definechangesauthor[name={Your Name}, color=blue]{yourid}
+```
+
+Set `manuscriptReview.changesAuthor` to `yourid` (or use
+`MR_CHANGES_AUTHOR` / `--changes-author yourid` with the CLI). The tool then
+writes `\added[id=yourid]{...}`, `\deleted[id=yourid]{...}` and
+`\replaced[id=yourid]{...}{...}`. With no author ID it omits the optional
+argument, which is also valid for the package.
+
+The **Clean** PDF preview no longer needs a custom `\ifdefined...Clean`
+switch: when the paper loads `changes`, the tool passes `final` to the package
+so the clean build hides all tracked changes.
 
 ## Settings
 
@@ -65,6 +88,7 @@ Keyboard: `j` / `k` or `Alt+↓` / `Alt+↑` next or previous pending change,
 |---|---|
 | `manuscriptReview.papersSubfolder` | Subfolder with one folder per paper. Default `Papers`. Leave empty when the workspace root itself is a paper. |
 | `manuscriptReview.profilesFolder` | Optional folder containing `<paper-name>.md` writing instructions for the AI. |
+| `manuscriptReview.changesAuthor` | Author ID from `\definechangesauthor` in the paper. Used in tracked output as `[id=...]`. Leave empty to omit the optional ID. |
 
 ## Where data lives
 

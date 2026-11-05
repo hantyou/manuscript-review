@@ -10,6 +10,7 @@ const DEF_COMMANDS = new Set([
   "DeclareDocumentCommand", "newenvironment", "renewenvironment",
   "def", "gdef", "edef", "xdef", "pdfstringdefDisableCommands",
   "DeclareMathOperator", "newtheorem", "newif", "AtBeginDocument",
+  "definechangesauthor",
 ]);
 const MARKUP = { added: 1, deleted: 1, replaced: 2 };
 const HEADINGS = { part: 0, chapter: 0, section: 1, subsection: 2, subsubsection: 3, paragraph: 4 };
@@ -43,6 +44,21 @@ export function skipGroup(m, i, open = "{", close = "}") {
 }
 
 function skipWs(m, i) { while (i < m.length && /\s/.test(m[i])) i++; return i; }
+
+/** Skip one optional [key=value] argument, including braces inside it. */
+function skipOptional(m, i) {
+  i = skipWs(m, i);
+  if (m[i] !== "[") return i;
+  let depth = 0;
+  for (let k = i; k < m.length; k++) {
+    const c = m[k];
+    if (c === "\\") { k++; continue; }
+    if (c === "{") { const e = skipGroup(m, k); if (e < 0) return i; k = e - 1; continue; }
+    if (c === "[") depth++;
+    else if (c === "]") { depth--; if (depth === 0) return k + 1; }
+  }
+  return i;
+}
 
 /** Read a command name at m[i] === "\\". Returns {name, end}. */
 function readCommand(m, i) {
@@ -114,7 +130,7 @@ export function walk(src, on, masked = maskComments(src)) {
     }
     if (name === "appendix") { on({ type: "heading", level: 1, title: "Appendix", start: i, end }); i = end; continue; }
     if (name in MARKUP) {
-      const j = skipWs(m, end);
+      const j = skipWs(m, skipOptional(m, end));
       if (m[j] === "{") {
         const args = []; let k = j;
         for (let a = 0; a < MARKUP[name]; a++) {

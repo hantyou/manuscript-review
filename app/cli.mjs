@@ -25,7 +25,7 @@ function parseArgs(argv) {
 }
 
 async function cmdOpen(pos, opt) {
-  if (!pos[0]) throw new Error("Usage: open <paper-folder> [--main root.tex] [--port N] [--no-browser] [--instance name] [--rebind]");
+  if (!pos[0]) throw new Error("Usage: open <paper-folder> [--main root.tex] [--port N] [--no-browser] [--instance name] [--rebind] [--changes-author id]");
   const dir = path.resolve(pos[0]);
   if (!existsSync(dir)) throw new Error("Folder not found: " + dir);
   const proj = await prepareProject({ dir, main: opt.main, instance: opt.instance || "", rebind: !!opt.rebind });
@@ -37,7 +37,8 @@ async function cmdOpen(pos, opt) {
     return;
   }
 
-  const { session, srv } = await startProject(proj, { port: opt.port ? +opt.port : 0 });
+  const changesAuthor = opt["changes-author"] || process.env.MR_CHANGES_AUTHOR || "";
+  const { session, srv } = await startProject(proj, { port: opt.port ? +opt.port : 0, changesAuthor });
   const c = session.project();
   if (proj.note) console.log(proj.note);
   console.log(`Project id : ${proj.id}`);
@@ -77,7 +78,7 @@ const run = async () => {
   if (cmd === "agents") return console.log(JSON.stringify(await detectAgents(true), null, 2));
   if (cmd === "projects") return console.log(listProjects().map((p) => `${p.id}  ${p.path}  (${p.main})`).join("\n") || "No projects yet.");
   if (cmd === "rebind") { if (pos.length < 2) throw new Error("Usage: rebind <project-id> <new-folder>"); console.log(rebindProject(pos[0], pos[1])); return; }
-  console.log("Usage: cli.mjs open <paper-folder> [--main file] | doctor | agents | projects | rebind <id> <folder>");
+  console.log("Usage: cli.mjs open <paper-folder> [--main file] [--changes-author id] | doctor | agents | projects | rebind <id> <folder>");
 };
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   run().catch((e) => { console.error("Error: " + e.message); process.exit(1); });

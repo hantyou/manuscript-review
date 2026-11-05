@@ -5,14 +5,16 @@ import { flatten, norm } from "../shared/tex.mjs";
 import { chosenText, statusOf, now, rid } from "./model.mjs";
 import { encodeSource, readSource, sha1, sha256 } from "./scan.mjs";
 
-export function replacementFor(u, mode, baseMatch) {
+export function replacementFor(u, mode, baseMatch, changesAuthor = "") {
   const T = flatten((chosenText(u) ?? "").replace(/\r\n/g, "\n"), "new").trim();
   if (mode !== "tracked") return T;
   const B = (baseMatch?.status === "exact" ? baseMatch.text : u.imported.original).trim();
   if (norm(T) === norm(B)) return T;
-  if (!B) return `\\added{${T}}`;
-  if (!T) return `\\deleted{${B}}`;
-  return `\\replaced{${T}}{${B}}`;
+  const id = String(changesAuthor || "").trim().replace(/[^A-Za-z0-9_-]/g, "");
+  const opt = id ? `[id=${id}]` : "";
+  if (!B) return `\\added${opt}{${T}}`;
+  if (!T) return `\\deleted${opt}{${B}}`;
+  return `\\replaced${opt}{${T}}{${B}}`;
 }
 
 /** Apply sorted, non-overlapping edits to one file's text. */
@@ -31,7 +33,7 @@ export function applyEdits(text, edits, eol) {
   return out;
 }
 
-export function buildPlan(review, scan, matches, mode) {
+export function buildPlan(review, scan, matches, mode, opts = {}) {
   const byState = new Map(scan.units.concat(scan.manualUnits || []).map((s) => [s.stateId, s]));
   const patches = [], conflicts = [], skipped = { pending: 0, stale: 0, detached: 0 };
   const perFile = new Map();
@@ -44,7 +46,7 @@ export function buildPlan(review, scan, matches, mode) {
     const su = byState.get(u.id);
     if (!su) { conflicts.push({ unitId: u.id, reason: "Passage no longer found in the source." }); continue; }
     if (u.decision.srcSha && su.srcSha !== u.decision.srcSha) { conflicts.push({ unitId: u.id, reason: "Source text changed after the decision. Review it again." }); continue; }
-    const text = replacementFor(u, mode, matches?.[u.id]);
+    const text = replacementFor(u, mode, matches?.[u.id], opts.changesAuthor);
     const f = scan.files.get(su.file);
     patches.push({ unitId: u.id, file: su.file, start: su.start, end: su.end, line: su.line, before: f.text.slice(su.start, su.end), text, kind: u.kind, choice: u.decision.choice });
     if (!perFile.has(su.file)) perFile.set(su.file, []);

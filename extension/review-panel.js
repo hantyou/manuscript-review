@@ -82,9 +82,11 @@ async function openReview(context, paperDir, main) {
     return;
   }
 
-  const configured = vscode.workspace.getConfiguration("manuscriptReview").get("profilesFolder", "");
+  const config = vscode.workspace.getConfiguration("manuscriptReview");
+  const configured = config.get("profilesFolder", "");
   const profiles = configured ? (path.isAbsolute(configured) ? configured : path.join(proj.dir, configured)) : profilesDir();
-  const { session, srv } = await startProject(proj, { profiles });
+  const changesAuthor = config.get("changesAuthor", "");
+  const { session, srv } = await startProject(proj, { profiles, changesAuthor });
 
   const panel = vscode.window.createWebviewPanel(
     "manuscriptReview.review",

@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { walk, flatten, maskComments, sentenceRanges, extractMacros, hasMarkup } from "../shared/tex.mjs";
 import { wordDiff } from "../shared/worddiff.mjs";
-import { applyEdits } from "../core/apply.mjs";
+import { applyEdits, replacementFor } from "../core/apply.mjs";
+import { detectChangesPackage } from "../core/build.mjs";
 
 const nodes = (s) => { const out = []; walk(s, (e) => e.type === "node" && out.push(e)); return out; };
 
@@ -62,4 +63,43 @@ test("applyEdits preserves CRLF and removes blank line on deletion", () => {
   assert.equal(applyEdits(text, [{ start, end, text: "y\nz" }], "\r\n"), "a\r\nB y\r\nz\r\nc\r\n");
   const t2 = "a\r\n\\deleted{x}\r\nc\r\n"; const s2 = t2.indexOf("\\deleted");
   assert.equal(applyEdits(t2, [{ start: s2, end: s2 + 11, text: "" }], "\r\n"), "a\r\nc\r\n");
+});
+
+test("changes package optional author arguments are parsed and stripped", () => {
+  const s = String.raw`A \added[id=alice]{new} B \deleted[id=bob]{old} C \replaced[id=carol,remark={note}]{new2}{old2} D`;
+  const n = nodes(s); assert.equal(n.length, 3);
+  assert.equal(flatten(s, "new"), "A new B C new2 D");
+  assert.equal(flatten(s, "old"), "A B old C old2 D");
+  assert.ok(hasMarkup(s));
+});
+
+test("changes package definition is skipped", () => {
+  const s = String.raw`\definechangesauthor[name={Alice}, color=blue]{alice}
+Text \added[id=alice]{real}.`;
+  const n = nodes(s); assert.equal(n.length, 1);
+  assert.ok(flatten(s, "new").endsWith("Text real."));
+});
+
+const unit = (original, proposed, importedOriginal = original) => ({
+  decision: { choice: "proposed" },
+  original: { versions: [{ text: original }], head: 0 },
+  proposed: { versions: [{ text: proposed }], head: 0 },
+  custom: { versions: [{ text: proposed }], head: 0 },
+  imported: { original: importedOriginal },
+});
+
+test("tracked output uses changes package commands and author id", () => {
+  const exact = { status: "exact", text: "old" };
+  assert.equal(replacementFor(unit("old", "new"), "tracked", exact), "\\replaced{new}{old}");
+  assert.equal(replacementFor(unit("old", "new"), "tracked", exact, "alice"), "\\replaced[id=alice]{new}{old}");
+  assert.equal(replacementFor(unit("", "new", ""), "tracked", null, "alice"), "\\added[id=alice]{new}");
+  assert.equal(replacementFor(unit("old", "", "old"), "tracked", null, "alice"), "\\deleted[id=alice]{old}");
+  assert.equal(replacementFor(unit("old", "new"), "clean", exact, "alice"), "new");
+});
+
+test("clean builds detect the changes package", () => {
+  const yes = { files: new Map([["main.tex", { text: "\\documentclass{article}\n\\usepackage[final]{changes}" }]]) };
+  const no = { files: new Map([["main.tex", { text: "\\documentclass{article}" }]]) };
+  assert.equal(detectChangesPackage(yes), true);
+  assert.equal(detectChangesPackage(no), false);
 });

@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawn, execFile } from "node:child_process";
 import { encodeSource } from "./scan.mjs";
+import { maskComments } from "../shared/tex.mjs";
 
 const SKIP_DIRS = new Set([".git", ".hg", ".svn", "node_modules", "__pycache__", ".venv", "venv", "tmp"]);
 const SKIP_EXT = /\.(aux|log|out|fls|fdb_latexmk|synctex\.gz|blg|bbl|toc|lof|lot|bcf|run\.xml)$/i;
@@ -29,6 +30,14 @@ export function detectCleanSwitch(scan) {
   return null;
 }
 
+/** True when the paper loads the LaTeX changes package. */
+export function detectChangesPackage(scan) {
+  for (const f of scan.files.values()) {
+    if (/\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{\s*changes\s*\}/.test(maskComments(f.text))) return true;
+  }
+  return false;
+}
+
 /** Copy the project to a staging folder and overlay edited sources. */
 export async function stage(proj, scan, overlay, name) {
   const dir = path.join(proj.stateDir, "build", name);
@@ -42,12 +51,16 @@ export async function stage(proj, scan, overlay, name) {
   return dir;
 }
 
-export async function compile(dir, mainRel, { clean, cleanSwitch, jobname }) {
+export async function compile(dir, mainRel, { clean, cleanSwitch, changesFinal, jobname }) {
   const args = ["-pdf", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-jobname=${jobname}`];
   let entry = mainRel;
-  if (clean && cleanSwitch) { // a tiny wrapper avoids command-line quoting of backslashes
+  if (clean && (cleanSwitch || changesFinal)) { // a tiny wrapper avoids command-line quoting of backslashes
     entry = "mr_clean_wrapper.tex";
-    await fs.writeFile(path.join(dir, entry), cleanSwitch + "\n\\input{" + mainRel.replace(/\.tex$/i, "") + "}\n");
+    const lines = [];
+    if (changesFinal) lines.push("\\PassOptionsToPackage{final}{changes}");
+    if (cleanSwitch) lines.push(cleanSwitch);
+    lines.push("\\input{" + mainRel.replace(/\.tex$/i, "") + "}");
+    await fs.writeFile(path.join(dir, entry), lines.join("\n") + "\n");
   }
   args.push(entry);
   return new Promise((resolve) => {

@@ -62,8 +62,8 @@ export async function activeServer(proj) {
 }
 
 /** Create the session and the loopback API server, and publish server.json. */
-export async function startProject(proj, { profiles, port = 0 } = {}) {
-  const session = new Session(proj, { profilesDir: profiles || profilesDir() });
+export async function startProject(proj, { profiles, port = 0, changesAuthor = "" } = {}) {
+  const session = new Session(proj, { profilesDir: profiles || profilesDir(), changesAuthor });
   await session.init();
   const srv = await startServer(session, { port });
   writeJson(path.join(proj.stateDir, "server.json"), { pid: process.pid, url: srv.url, token: srv.token, port: srv.port });
