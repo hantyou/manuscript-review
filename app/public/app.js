@@ -12,7 +12,7 @@ let P = null, A = null, C = {}, env = { macros: {}, bib: {}, labels: {}, katex: 
 let activeId = null, agentsInfo = null, thread = [], order = [];
 let filter = store.get("filter", "all"), query = "";
 const view = { mode: store.get("mode", "compare"), hide: store.get("hide", false), src: store.get("src", false), ai: store.get("ai", true), changes: store.get("changes", false), theme: store.get("theme", "auto"), drawer: store.get("drawer", true) };
-const openEd = new Set(), forceCard = new Set(), timers = {};
+const openEd = new Set(), forceCard = new Set(), collapsed = new Set(), timers = {};
 let blockEls = [], unitBlock = {}, renderToken = 0, pumpAll = null;
 
 const R = (s) => renderTex(s, env);
@@ -164,9 +164,12 @@ function unitNode(id) {
   const c = C[id];
   if (!c) { const s = document.createElement("span"); s.textContent = "[missing unit]"; return s; }
   const card = (view.mode === "compare" && (!filtering() || cardMatch(c))) || forceCard.has(id);
-  if (card) return cardEl(id);
-  const s = document.createElement("span"); s.className = `u-inline st-${c.status}`; s.dataset.id = id; s.dataset.unit = id;
-  s.innerHTML = R(finalText(c)) || "<i>(removed)</i>"; s.title = `${c.status}${c.decision ? " · " + c.decision.choice : ""}. Click to compare`;
+  if (card && !collapsed.has(id)) return cardEl(id);
+  const s = document.createElement("span"); s.className = `u-inline st-${c.status}${collapsed.has(id) ? " collapsed" : ""}`; s.dataset.id = id; s.dataset.unit = id;
+  s.innerHTML = R(finalText(c)) || "<i>(removed)</i>";
+  s.title = collapsed.has(id)
+    ? `Collapsed · ${c.status}${c.decision ? " · " + c.decision.choice : ""}. Click to expand`
+    : `${c.status}${c.decision ? " · " + c.decision.choice : ""}. Click to compare`;
   return s;
 }
 const finalText = (c) => (c.status === "applied" && c.applied ? c.applied.text : c.decision && ["decided", "stale"].includes(c.status) ? c.decision.text : c.proposed.text);
@@ -187,7 +190,8 @@ function fillCard(el) {
     <span class="pill">${{ replace: "Replacement", add: "Addition", delete: "Deletion", manual: "Unmarked text" }[c.kind]}</span>
     <span class="pill ${pc}" title="${esc(c.baseline?.note || "")}">${esc(pl)}</span>
     ${c.original.edited ? '<span class="pill warn">original edited</span>' : ""}${c.proposed.edited ? '<span class="pill warn">proposed edited</span>' : ""}${c.comments.length ? `<span class="pill">${icon("comment")}${c.comments.length}</span>` : ""}
-    <span class="loc">${esc(c.file)}:${c.line ?? "?"}</span>${c.sourceChangedInfo ? '<button class="btn tonal sm" data-act="takesource">Source changed. Use it</button>' : ""}`;
+    <span class="loc">${esc(c.file)}:${c.line ?? "?"}</span>${c.sourceChangedInfo ? '<button class="btn tonal sm" data-act="takesource">Source changed. Use it</button>' : ""}
+    <button class="icon-btn sm" data-act="collapse" title="Collapse this change" aria-label="Collapse this change">${icon("collapse")}</button>`;
   const ops = wordDiff(c.original.text, c.proposed.text);
   const col = (k) => {
     const x = c[k], isO = k === "original", empty = !x.text.trim();
@@ -231,7 +235,10 @@ function fillEditor(el) {
   $(".base-host", host).innerHTML = b ? `<details class="base" ${["differs", "ambiguous", "missing"].includes(b.status) ? "open" : ""}><summary>Git baseline (read-only) · ${esc(provPill(c)[1])} ${b.file ? `· ${esc(b.file)}:${b.line} at ${esc(c.baselineCommit)}` : ""}</summary><p class="small muted">${esc(b.note || "")}</p>${b.text ? (view.src ? `<div class="mono">${esc(b.text)}</div>` : `<div class="read">${diffHtml(wordDiff(b.text, c.original.text), "del", env, view.hide)}</div><div class="small muted">Highlights show where the Git text differs from the original wording above.</div>`) : ""}</details>` : "";
 }
 function refreshUnit(id) {
-  $$(`[data-unit="${cssId(id)}"]`).forEach((el) => { if (el.classList.contains("ucard")) fillCard(el); else el.replaceWith(unitNode(id)); });
+  $$(`[data-unit="${cssId(id)}"]`).forEach((el) => {
+    if (el.classList.contains("ucard") && !collapsed.has(id)) fillCard(el);
+    else el.replaceWith(unitNode(id));
+  });
   renderOutline(); renderProgress();
 }
 function setCard(id, d) { C[id] = d; refreshUnit(id); if (id === activeId) renderAiHead(); }
@@ -279,8 +286,15 @@ document.addEventListener("input", (e) => {
   if (t.id === "search") debounce("q", () => { query = t.value.trim(); renderDoc(); }, 250);
 });
 async function run(id, fn, undoLabel) {
-  try { setSave("saving"); const d = await fn(); setCard(id, d); afterMutation(); if (undoLabel) toast(undoLabel, "Undo", () => run(id, () => api("POST", `/units/${id}/decision/undo`))); }
+  try { setSave("saving"); const d = await fn(); setCard(id, d); afterMutation(); if (undoLabel) toast(undoLabel, "Undo", () => undoDecision(id)); }
   catch (e) { toast(e.message); }
+}
+function undoDecision(id) {
+  return run(id, async () => {
+    const d = await api("POST", `/units/${id}/decision/undo`);
+    collapsed.delete(id); forceCard.add(id);
+    return d;
+  });
 }
 document.addEventListener("click", async (e) => {
   const t = e.target;
@@ -294,16 +308,21 @@ document.addEventListener("click", async (e) => {
     $("#popGo").onclick = async () => { pop.hidden = true; try { const r2 = await api("POST", "/units/manual", { file: sent.dataset.f, fileSha: sent.dataset.sha, start: +sent.dataset.s, end: +sent.dataset.e }); await loadProject(); await loadArticle(); goto(r2.id, "auto"); } catch (er) { toast(er.message); } };
     return;
   }
-  const inl = t.closest(".u-inline"); if (inl) { const id = inl.dataset.id; forceCard.add(id); inl.replaceWith(unitNode(id)); setActive(id); return; }
+  const inl = t.closest(".u-inline"); if (inl) { const id = inl.dataset.id; collapsed.delete(id); forceCard.add(id); inl.replaceWith(unitNode(id)); setActive(id); return; }
   const card = t.closest(".ucard"); if (card && !t.closest("button,textarea,a,summary") && card.dataset.id !== activeId) setActive(card.dataset.id);
   const b = t.closest("[data-act]"); if (!b) return;
   const a = b.dataset.act, k = b.dataset.k, id = b.closest(".ucard")?.dataset.id;
   if (id && id !== activeId) setActive(id);
   const acts = {
-    use: () => run(id, () => api("PUT", `/units/${id}/decision`, { choice: k }), `Decided: ${k} wording for this unit`),
+    use: () => run(id, async () => {
+      const d = await api("PUT", `/units/${id}/decision`, { choice: k });
+      collapsed.add(id); forceCard.delete(id);
+      return d;
+    }, `Decided: ${k} wording for this unit`),
     custom: () => { if (!C[id].custom.touched && !C[id].decision) { openEd.add(id); fillCard(findUnitEl(id)); $(`#u-${cssId(id)} textarea[data-edit=custom]`)?.focus(); } else run(id, () => api("PUT", `/units/${id}/decision`, { choice: "custom" }), "Decided: custom wording"); },
     pending: () => run(id, () => api("PUT", `/units/${id}/decision`, { choice: "pending" })),
-    undodec: () => run(id, () => api("POST", `/units/${id}/decision/undo`)),
+    undodec: () => undoDecision(id),
+    collapse: () => { collapsed.add(id); forceCard.delete(id); refreshUnit(id); },
     undo: () => run(id, () => api("POST", `/units/${id}/candidate/${k}/undo`)),
     redo: () => run(id, () => api("POST", `/units/${id}/candidate/${k}/redo`)),
     restore: () => run(id, () => api("POST", `/units/${id}/candidate/${k}/restore`)),

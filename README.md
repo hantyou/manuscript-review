@@ -46,6 +46,9 @@ locally.
   stands with the wording chosen so far.
 - **Comparison card**: original wording on the left, proposed wording on the
   right, with word-level highlights. Decide, edit or ask the AI about it.
+  **Use original** / **Use proposed** collapse the card to inline text; the
+  collapse button hides a card without deciding, and clicking inline text
+  reopens it.
 - **AI panel** (right): choose the agent and model, ask a question, and turn a
   proposal into an edit of either candidate.
 - **PDF previews**: tracked or clean, from the current files or with your

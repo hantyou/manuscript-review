@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Collapse a change after choosing original or proposed wording.
+- Add a collapse button to every comparison card; click the inline text to reopen it.
+
 ## 0.1.2
 
 - Remove maintainer-only publishing notes from the Marketplace README.
