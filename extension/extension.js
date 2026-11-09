@@ -132,7 +132,7 @@ function activate(context) {
   context.subscriptions.push(output);
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  status.text = "$(book) Review";
+  status.text = "$(book)";
   status.tooltip = "Open a manuscript review";
   status.command = "manuscriptReview.open";
   status.show();

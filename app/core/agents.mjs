@@ -3,7 +3,8 @@
 // agent runs in an isolated workspace with write tools switched off.
 //
 // To add an agent: add an entry to ADAPTERS with `command`, `args(opts)` and
-// `parse(line, emit)`. Nothing else in the app switches on the agent id.
+// `parse(line, emit)`, plus optional `env(opts)` and an async `detect({row, exe, exec})`
+// that refines what detection reports. Nothing else in the app switches on the agent id.
 import { spawn, execFile } from "node:child_process";
 import { promises as fs, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -39,6 +40,31 @@ const CLAUDE_ARGS = (o) => [
   "--output-format", "stream-json", "--verbose", "--include-partial-messages",
   ...(o.model ? ["--model", o.model] : []),
 ];
+
+const stripAnsi = (s) => String(s || "").replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+
+/** `opencode auth list` ends with a "<n> credentials" summary; returns null when it cannot be read. */
+export function openCodeCredentials(out) {
+  const m = /([0-9]+)\s+credentials?\b/.exec(stripAnsi(out));
+  return m ? Number(m[1]) : null;
+}
+
+/** `opencode models` prints one `provider/model` id per line. Ids may hold further slashes. */
+export function openCodeModels(out) {
+  const list = []; const seen = new Set();
+  for (const line of stripAnsi(out).split("\n")) {
+    const id = line.trim();
+    if (!/^[\w.@-]+(?:\/[\w.:@-]+)+$/.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    const i = id.indexOf("/");
+    list.push({ id, label: id.slice(i + 1), group: id.slice(0, i) });
+  }
+  return list;
+}
+
+// OpenCode gates every tool through its permission config, which this env var
+// inlines. Nothing is allowed unless the paper was copied into the work folder.
+const openCodePermission = (readFiles) => JSON.stringify(readFiles ? { "*": "deny", read: "allow", glob: "allow", grep: "allow" } : { "*": "deny" });
 
 export const ADAPTERS = {
   claude: {
@@ -76,6 +102,44 @@ export const ADAPTERS = {
       }
     },
   },
+  opencode: {
+    label: "OpenCode", command: "opencode", versionArgs: ["--version"], authArgs: ["auth", "list"],
+    authOk: (out) => (openCodeCredentials(out) || 0) > 0,
+    status: "verified", streaming: false,
+    models: [{ id: "", label: "Default (the CLI's own choice)" }],
+    via: "OpenCode CLI using its own provider sign-ins; the prompt goes to the model you pick there. The run is read-only: the plan agent, an empty work folder, project config ignored, every tool denied and an in-memory session database, so no file is touched and no session is left in your OpenCode history.",
+    args: (o) => ["run", "--format", "json", "--agent", "plan", "--dir", o.cwd, ...(o.model ? ["--model", o.model] : [])],
+    env: (o) => ({ OPENCODE_PERMISSION: openCodePermission(o.readFiles), OPENCODE_DISABLE_PROJECT_CONFIG: "1", OPENCODE_DB: ":memory:" }),
+    parse(line, emit) {
+      let j; try { j = JSON.parse(line); } catch { return; }
+      const p = j.part || {};
+      if (j.type === "text" && p.text) emit.text(String(p.text), true);
+      else if (j.type === "step_finish" && p.providerID && p.modelID) emit.meta({ model: `${p.providerID}/${p.modelID}` });
+      else if (j.type === "error") {
+        const e = j.error || {};
+        emit.error((e.data && e.data.message) || e.message || e.name || "OpenCode reported an error.");
+      }
+    },
+    /** Model list and configured default come from the CLI, so the choices match this machine. */
+    async detect({ row, exe, exec }) {
+      const probe = (args, ms) => exec(exe.file, [...exe.argv, ...args], ms).catch(() => ({ ok: false, out: "", stdout: "" }));
+      const [m, cfg] = await Promise.all([probe(["models"], 30000), probe(["debug", "config"], 20000)]);
+      const list = openCodeModels(m.out);
+      let configured = "";
+      try { configured = String(JSON.parse(cfg.stdout || "")?.model || ""); } catch {}
+      if (list.length) {
+        row.models = [{ id: "", label: configured ? `Default (configured: ${configured})` : "Default (the CLI's own choice)" }, ...list];
+        if (configured && !list.some((x) => x.id === configured)) row.models.push({ id: configured, label: configured + " (configured)" });
+      }
+      if (row.auth !== "signed-in") {
+        // OpenCode ships free models that need no sign-in, so a missing credential is not fatal.
+        row.usable = list.length > 0;
+        row.note = list.length
+          ? "No provider sign-in found. Only models that need no credential will answer; sign in with `opencode auth login` for the rest."
+          : "Not signed in and no model is available. Sign in from a terminal with `opencode auth login`.";
+      }
+    },
+  },
   gemini: { label: "Gemini CLI", command: "gemini", status: "unsupported", via: "Detected only. No adapter has been verified." },
   codebuddy: { label: "CodeBuddy", command: "codebuddy", status: "unsupported", via: "Detected only. No adapter has been verified." },
   agy: { label: "agy", command: "agy", status: "unsupported", via: "Detected only. No adapter has been verified." },
@@ -83,7 +147,7 @@ export const ADAPTERS = {
 
 const cache = { at: 0, value: null };
 const exec = (file, args, ms = 15000) => new Promise((res) => {
-  execFile(file, args, { timeout: ms, windowsHide: true }, (err, stdout, stderr) => res({ ok: !err, out: String(stdout || "") + String(stderr || "") }));
+  execFile(file, args, { timeout: ms, windowsHide: true }, (err, stdout, stderr) => res({ ok: !err, out: String(stdout || "") + String(stderr || ""), stdout: String(stdout || "") }));
 });
 
 export async function detectAgents(force = false) {
@@ -103,6 +167,8 @@ export async function detectAgents(force = false) {
         if (row.auth !== "signed-in") row.note = "Not signed in. Sign in from a terminal with the tool's own login command.";
       }
       row.usable = row.auth === "signed-in";
+      // A failed extra probe must not hide an agent that is installed.
+      if (a.detect) { try { await a.detect({ row, exe, exec }); } catch {} }
     }
     list.push(row);
   }
@@ -120,7 +186,10 @@ export function startRun({ agent, prompt, cwd, model, readFiles, onText, onMeta,
   const exe = resolveExecutable(a.command);
   if (!exe) throw new Error(`${a.label} was not found on PATH.`);
   const args = [...exe.argv, ...a.args({ cwd, model, readFiles })];
-  const child = spawn(exe.file, args, { cwd, windowsHide: true, shell: !!exe.needsShell, stdio: ["pipe", "pipe", "pipe"] });
+  const spawnOpts = { cwd, windowsHide: true, shell: !!exe.needsShell, stdio: ["pipe", "pipe", "pipe"] };
+  // An adapter may add env vars; the inherited environment stays intact.
+  if (a.env) spawnOpts.env = { ...process.env, ...a.env({ cwd, model, readFiles }) };
+  const child = spawn(exe.file, args, spawnOpts);
   let buf = "", text = "", err = "", finalText = null, errorText = null, cancelled = false;
   const emit = {
     text: (d, replace) => { text = replace ? (text ? text + "\n\n" + d : d) : text + d; onText?.(text); },

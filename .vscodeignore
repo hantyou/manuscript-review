@@ -3,6 +3,7 @@
 .vscode/**
 .gitignore
 .vscodeignore
+PROGRESS.md
 node_modules/**
 app/tests/**
 docs/**

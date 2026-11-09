@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.7
+
+- Add OpenCode as an AI source: detect its sign-in, list the models from `opencode models`, and label the entry for the model in your OpenCode config.
+- Run OpenCode read-only (plan agent, every tool denied, project config ignored, in-memory session database) and turn its JSON events into replies and proposals.
+- Group long model lists by provider in the model selector.
+
+## 0.1.6
+
+- Give AI conversations more space with collapsible settings, passage context, and prompt suggestions.
+- Retain message drafts while switching passages and keep the composer visible in narrow windows.
+- Replace the Open Current Paper toolbar label with a book icon.
+- Make the status-bar review button icon-only, keeping its tooltip.
+
 ## 0.1.5
 
 - Add a Reviewer selector to the review panel for switching the `changes` package author per paper.

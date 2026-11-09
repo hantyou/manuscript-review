@@ -49,8 +49,11 @@ locally.
   **Use original** / **Use proposed** collapse the card to inline text; the
   collapse button hides a card without deciding, and clicking inline text
   reopens it.
-- **AI panel** (right): choose the agent and model, ask a question, and turn a
-  proposal into an edit of either candidate.
+- **AI panel** (right): ask about the selected passage and turn a proposal into
+  an edit of either candidate. Expand the agent/model row for settings and writing
+  instructions, or **Suggestions** for a starting prompt. Expand the passage
+  heading to see its source and excerpt. Draft messages stay with their passage
+  while you switch between cards; **Ctrl+Enter** / **Cmd+Enter** sends.
 - **PDF previews**: tracked or clean, from the current files or with your
   decisions applied. Built in the tool's staging folder with `latexmk`.
 - **Apply reviewed changes**: preview the patch, choose clean or tracked output,
@@ -60,6 +63,25 @@ locally.
 
 Keyboard: `j` / `k` or `Alt+↓` / `Alt+↑` next or previous pending change,
 `/` search, `Esc` closes dialogs.
+
+### Supported AI agents
+
+The panel uses whichever of these CLIs is installed and signed in on the machine
+that holds the manuscript:
+
+| Agent | State |
+|---|---|
+| Claude Code (`claude`) | Verified; streams its reply. |
+| OpenCode (`opencode`) | Verified. The model list comes from `opencode models`, and **Default** uses the model in your OpenCode config. |
+| Codex CLI (`codex`) | Written from its documented flags; no reply was obtained on the machine where it was tried. |
+| Gemini CLI, CodeBuddy, `agy` | Detected only, no adapter. |
+
+Every agent runs read-only in a scratch folder inside the tool's state directory:
+the prompt arrives on stdin, file-editing tools are switched off, and the
+manuscript is not in that folder. OpenCode additionally runs its `plan` agent with
+every tool denied (`OPENCODE_PERMISSION`), ignores project-level config, and uses
+an in-memory session database, so a review leaves no session in your OpenCode
+history. Credentials stay with each CLI; the extension never reads or stores them.
 
 ### Using the LaTeX changes package
 

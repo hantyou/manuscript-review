@@ -10,6 +10,8 @@ const store = { get: (k, d) => { try { return JSON.parse(localStorage.getItem("m
 
 let P = null, A = null, C = {}, env = { macros: {}, bib: {}, labels: {}, katex: false };
 let activeId = null, agentsInfo = null, thread = [], order = [];
+const aiDrafts = new Map(), aiSubmitting = new Set();
+let threadUnit = null;
 let filter = store.get("filter", "all"), query = "";
 const view = { mode: store.get("mode", "compare"), hide: store.get("hide", false), src: store.get("src", false), ai: store.get("ai", true), changes: store.get("changes", false), theme: store.get("theme", "auto"), drawer: store.get("drawer", true) };
 const openEd = new Set(), forceCard = new Set(), collapsed = new Set(), timers = {};
@@ -65,7 +67,10 @@ async function boot() {
   const start = order.includes(saved) ? saved : first;
   if (start) { await setActive(start); if (saved && start === saved) goto(start, "auto"); }
   onEvent(async (ev) => {
-    if (ev.type === "chat" && ev.unitId === activeId) { thread = await api("GET", `/units/${activeId}/chat`); renderThread(); }
+    if (ev.type === "chat" && ev.unitId === activeId) {
+      const id = activeId, messages = await api("GET", `/units/${id}/chat`);
+      if (activeId === id) { thread = messages; renderThread(); }
+    }
     if (ev.type === "build") renderPreviewModal(true);
   });
   window.addEventListener("focus", afterMutation); setInterval(afterMutation, 20000); afterMutation();
@@ -384,8 +389,11 @@ document.addEventListener("keydown", (e) => {
 
 function highlightActive() { $$(".ucard.active").forEach((e) => e.classList.remove("active")); if (activeId) $(`#u-${cssId(activeId)}`)?.classList.add("active"); }
 async function setActive(id) {
-  if (!C[id]) return; activeId = id; store.set("cur:" + P.id, id); highlightActive(); renderAiHead();
-  thread = await api("GET", `/units/${id}/chat`).catch(() => []); renderThread();
+  if (!C[id]) return;
+  saveAiDraft(); activeId = id; store.set("cur:" + P.id, id); highlightActive(); renderAiHead(); restoreAiDraft();
+  thread = []; renderThread();
+  const messages = await api("GET", `/units/${id}/chat`).catch(() => []);
+  if (activeId === id) { thread = messages; renderThread(); }
 }
 
 // ---------- modals ----------
@@ -453,52 +461,152 @@ async function openInstructions() {
 }
 
 // ---------- AI panel ----------
-const QUICK = ["Keep the original meaning, but split this into two sentences.", "I prefer the original explanation. Make only its last clause clearer.", "Combine the first sentence on the left with the second on the right.", "Why was this revised? Does the proposed wording change the claim?", "Check this passage for ambiguity, unsupported claims and repeated wording."];
+const QUICK = [
+  ["Split a long sentence", "Keep the original meaning, but split this into two sentences."],
+  ["Clarify the original", "I prefer the original explanation. Make only its last clause clearer."],
+  ["Combine both versions", "Combine the first sentence on the left with the second on the right."],
+  ["Explain the revision", "Why was this revised? Does the proposed wording change the claim?"],
+  ["Check the wording", "Check this passage for ambiguity, unsupported claims and repeated wording."],
+];
 const curAgent = () => $("#aiAgent")?.value;
+function saveAiDraft() { if (activeId && $("#aiText")) aiDrafts.set(activeId, $("#aiText").value); }
+function restoreAiDraft() {
+  const text = $("#aiText"); if (!text) return;
+  text.value = aiDrafts.get(activeId) || ""; syncAiComposer();
+}
+function clearSentDraft(id, draft) {
+  if (aiDrafts.get(id) === draft) aiDrafts.delete(id);
+  const input = $("#aiText");
+  if (activeId === id && input?.value === draft) input.value = "";
+}
+function syncAiComposer() {
+  const text = $("#aiText"); if (!text) return;
+  const selected = !!C[activeId], hasText = !!text.value.trim(), pending = aiSubmitting.has(activeId);
+  const agent = agentsInfo?.agents.find((a) => a.id === curAgent());
+  text.disabled = !selected;
+  text.placeholder = selected ? "Ask about this passage…" : "Select a passage to start…";
+  text.style.height = "auto"; text.style.height = Math.min(160, Math.max(72, text.scrollHeight)) + "px";
+  $("#aiSend").disabled = !selected || !hasText || !agent?.usable || pending;
+  $("#aiSend").innerHTML = pending ? '<span class="spin"></span>Sending…' : `${icon("send")}Send`;
+  $("#aiComment").disabled = !selected || !hasText || pending;
+}
 function modelOptions(agentId) {
   const a = agentsInfo.agents.find((x) => x.id === agentId); const list = [...(a?.models || [{ id: "", label: "Default" }])];
   const chosen = store.get("model:" + agentId, agentsInfo.defaultModels?.[agentId] ?? "");
   if (chosen && !list.some((m) => m.id === chosen)) list.push({ id: chosen, label: chosen + " (custom)" });
-  return `${list.map((m) => `<option value="${esc(m.id)}" ${m.id === chosen ? "selected" : ""}>${esc(m.label)}</option>`).join("")}<option value="__custom">Other model name…</option>`;
+  const opt = (m) => `<option value="${esc(m.id)}" ${m.id === chosen ? "selected" : ""}>${esc(m.label)}</option>`;
+  // An agent may report many models; `group` collects them under their provider.
+  let html = "", group = null;
+  for (const m of list) {
+    const g = m.group || null;
+    if (g !== group) { if (group) html += "</optgroup>"; group = g; if (group) html += `<optgroup label="${esc(group)}">`; }
+    html += opt(m);
+  }
+  if (group) html += "</optgroup>";
+  return `${html}<option value="__custom">Other model name…</option>`;
 }
 function renderAi() {
   const ai = $("#ai"); if (!agentsInfo) return;
-  const sel = store.get("agent", agentsInfo.defaultAgent || (agentsInfo.agents.find((a) => a.usable) || {}).id);
+  saveAiDraft();
+  const wide = $("#aiWide")?.checked || false;
+  const settingsOpen = $("#aiSettings")?.open || false;
+  const preferred = store.get("agent", agentsInfo.defaultAgent);
+  const sel = (agentsInfo.agents.find((a) => a.id === preferred && a.usable) || agentsInfo.agents.find((a) => a.usable))?.id;
   const opts = agentsInfo.agents.map((a) => `<option value="${a.id}" ${a.id === sel ? "selected" : ""} ${a.usable ? "" : "disabled"}>${esc(a.label)}${a.usable ? (a.status === "verified" ? "" : " (not verified)") : a.found ? " (unavailable)" : " (not installed)"}</option>`).join("");
-  ai.innerHTML = `<div class="ai-top"><div class="ttl">${icon("ai")} Ask an AI</div><div class="unit" id="aiUnit"></div>
-      <div class="rowf"><select class="sel" id="aiAgent" aria-label="Agent">${opts}</select><select class="sel" id="aiModel" aria-label="Model">${modelOptions(sel)}</select></div>
-      <div class="small muted" id="aiVia"></div>
-      <div class="rowf small"><label><input type="checkbox" id="aiWide"> Whole manuscript</label><span class="spacer"></span><button class="btn text sm" id="aiDefault" title="Use this agent and model by default for every paper on this machine">Set as default</button><button class="btn text sm" id="aiRefresh">Re-detect</button><button class="btn text sm" id="aiInstr">Instructions</button></div></div>
-    <div class="ai-body" id="aiBody"></div>
-    <div class="ai-foot"><div class="quick" id="aiQuick">${QUICK.map((q) => `<button data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div><textarea id="aiText" placeholder="Message to the agent about this unit. Ctrl+Enter sends."></textarea>
-      <div class="rowf"><button class="btn filled" id="aiSend">${icon("send")}Send</button><button class="btn tonal" id="aiComment" title="Save as a comment without asking the agent">Add as comment</button></div></div>`;
-  const syncVia = () => { const a = agentsInfo.agents.find((x) => x.id === $("#aiAgent").value); $("#aiVia").textContent = a ? `${a.via}${a.version ? " · " + a.version : ""}` : ""; };
+  ai.innerHTML = `<div class="ai-top">
+      <div class="ai-heading"><div class="ttl">${icon("ai")} Ask an AI</div><button class="icon-btn sm" id="aiClose" title="Close AI panel" aria-label="Close AI panel">${icon("close")}</button></div>
+      <details class="ai-settings ai-disclosure" id="aiSettings" ${settingsOpen ? "open" : ""}>
+        <summary title="Agent and model settings">${icon("tune")}<span id="aiModelLabel"></span>${icon("expand", "chevron")}</summary>
+        <div class="ai-menu">
+          <div class="ai-menu-title">Agent settings</div>
+          <label class="ai-field" for="aiAgent">Agent<select class="sel" id="aiAgent">${opts || '<option value="">No agents detected</option>'}</select></label>
+          <label class="ai-field" for="aiModel">Model<select class="sel" id="aiModel">${modelOptions(sel)}</select></label>
+          <div class="small muted" id="aiVia"></div>
+          <div class="ai-settings-actions"><button class="btn tonal sm" id="aiInstr">Writing instructions</button><button class="btn text sm" id="aiRefresh">Re-detect agents</button><button class="btn text sm" id="aiDefault" title="Use this agent and model by default for every paper on this machine">Set as default</button></div>
+        </div>
+      </details>
+      <details class="ai-context" id="aiContext"><summary>${icon("pdf")}<span id="aiUnit"></span>${icon("expand", "chevron")}</summary><div id="aiExcerpt"></div></details>
+    </div>
+    <div class="ai-body" id="aiBody" role="region" aria-label="Conversation"></div>
+    <div class="ai-foot">
+      <div class="ai-compose-tools"><details class="ai-suggestions ai-disclosure" id="aiSuggestions"><summary>${icon("ai")}Suggestions${icon("expand", "chevron")}</summary>
+        <div class="ai-menu quick" id="aiQuick"><div class="ai-menu-title">Start with a suggestion</div>${QUICK.map(([label, q]) => `<button data-q="${esc(q)}" title="${esc(q)}">${esc(label)}${icon("next")}</button>`).join("")}</div>
+      </details><label class="ai-scope" title="Include the whole manuscript with your question"><input type="checkbox" id="aiWide" ${wide ? "checked" : ""}>Whole manuscript</label></div>
+      <div class="ai-composer"><textarea id="aiText" rows="3" aria-label="Message about the selected passage" aria-describedby="aiShortcut"></textarea>
+        <div class="ai-compose-actions"><button class="btn text sm" id="aiComment" title="Save this message as a comment without asking the AI">${icon("comment")}Comment</button><button class="btn filled sm" id="aiSend">${icon("send")}Send</button></div>
+      </div><div class="ai-shortcut" id="aiShortcut">Ctrl / ⌘ + Enter to send</div>
+    </div>`;
+  const syncVia = () => {
+    const a = agentsInfo.agents.find((x) => x.id === curAgent());
+    $("#aiVia").textContent = a ? `${a.via}${a.version ? " · " + a.version : ""}` : "Install and sign in to a supported agent, then re-detect.";
+    const model = $("#aiModel").selectedOptions[0]?.textContent || "Default";
+    $("#aiModelLabel").textContent = a?.usable ? `${a.label} · ${model}` : "Choose an agent";
+    $("#aiSettings summary").title = $("#aiModelLabel").textContent + " · Agent and model settings";
+    $("#aiDefault").disabled = !a?.usable; syncAiComposer();
+  };
   $("#aiAgent").onchange = (e) => { store.set("agent", e.target.value); $("#aiModel").innerHTML = modelOptions(e.target.value); syncVia(); };
-  $("#aiModel").onchange = (e) => { let v = e.target.value; if (v === "__custom") { v = (prompt("Model name to pass to the agent:") || "").trim(); if (!v) { $("#aiModel").innerHTML = modelOptions(curAgent()); return; } } store.set("model:" + curAgent(), v); $("#aiModel").innerHTML = modelOptions(curAgent()); };
+  $("#aiModel").onchange = (e) => { let v = e.target.value; if (v === "__custom") { v = (prompt("Model name to pass to the agent:") || "").trim(); if (!v) { $("#aiModel").innerHTML = modelOptions(curAgent()); return; } } store.set("model:" + curAgent(), v); $("#aiModel").innerHTML = modelOptions(curAgent()); syncVia(); };
   $("#aiDefault").onclick = async () => { await api("PUT", "/settings", { defaultAgent: curAgent(), defaultModel: $("#aiModel").value }); agentsInfo.defaultAgent = curAgent(); agentsInfo.defaultModels = { ...(agentsInfo.defaultModels || {}), [curAgent()]: $("#aiModel").value }; toast("Saved as the shared default for this machine."); };
-  $("#aiRefresh").onclick = async () => { await loadAgents(true); renderAi(); };
-  $("#aiInstr").onclick = openInstructions; $("#aiSend").onclick = sendAi; $("#aiComment").onclick = addComment;
-  $("#aiText").addEventListener("keydown", (e) => { if (e.ctrlKey && e.key === "Enter") sendAi(); });
-  $("#aiQuick").onclick = (e) => { const b = e.target.closest("[data-q]"); if (b) { $("#aiText").value = b.dataset.q; $("#aiText").focus(); } };
-  syncVia(); renderAiHead(); renderThread();
+  $("#aiRefresh").onclick = async () => {
+    const button = $("#aiRefresh"); button.disabled = true; button.textContent = "Detecting…";
+    try { await loadAgents(true); renderAi(); } catch (e) { toast(e.message); }
+    finally { button.disabled = false; button.textContent = "Re-detect agents"; }
+  };
+  $("#aiInstr").onclick = () => { $("#aiSettings").open = false; openInstructions(); };
+  $("#aiSend").onclick = sendAi; $("#aiComment").onclick = addComment;
+  $("#aiClose").onclick = () => { view.ai = false; store.set("ai", false); applyPanels(); $("#btnAi").focus(); };
+  $("#aiText").addEventListener("input", () => { saveAiDraft(); syncAiComposer(); });
+  $("#aiText").addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !e.isComposing) { e.preventDefault(); sendAi(); } });
+  $("#aiQuick").onclick = (e) => {
+    const b = e.target.closest("[data-q]"); if (!b || $("#aiText").disabled) return;
+    const text = $("#aiText"); text.value += (text.value.trim() ? "\n\n" : "") + b.dataset.q;
+    saveAiDraft(); syncAiComposer(); $("#aiSuggestions").open = false; text.focus();
+  };
+  $$(".ai-disclosure", ai).forEach((d) => d.addEventListener("toggle", () => { if (d.open) $$(".ai-disclosure", ai).forEach((other) => { if (other !== d) other.open = false; }); }));
+  syncVia(); renderAiHead(); restoreAiDraft(); threadUnit = null; renderThread();
 }
 function renderAiHead() {
   const el = $("#aiUnit"); if (!el) return; const c = C[activeId];
-  el.innerHTML = c ? `${esc(c.section)} · ${esc(c.file)}:${c.line ?? "?"}<br><i>${esc(c.preview)}</i>` : "Select a unit, or press the sparkle button on a card.";
+  el.textContent = c ? c.section || "Selected passage" : "No passage selected";
+  el.title = c ? `${c.section} · ${c.file}:${c.line ?? "?"}` : "Select a passage or use Ask AI on a card.";
+  $("#aiExcerpt").innerHTML = c ? `<div class="small muted">${esc(c.file)}:${c.line ?? "?"}</div><p>${esc(c.preview)}</p>` : "Select a passage or use Ask AI on a card.";
 }
+// Keep the compact menus dismissible with either the pointer or keyboard.
+document.addEventListener("click", (e) => { $$(".ai-disclosure[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; }); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") $$(".ai-disclosure[open]").forEach((d) => { const focused = d.contains(document.activeElement); d.open = false; if (focused) d.querySelector("summary").focus(); });
+});
 async function sendAi() {
-  const text = $("#aiText").value.trim(); if (!text || !activeId) return toast("Select a unit first.");
-  if (!curAgent()) return toast("No usable agent. Run the doctor command to see what is missing.");
-  try { await api("POST", `/units/${activeId}/chat`, { text, agent: curAgent(), model: $("#aiModel").value || undefined, wide: $("#aiWide").checked }); $("#aiText").value = ""; thread = await api("GET", `/units/${activeId}/chat`); renderThread(); } catch (e) { toast(e.message); }
+  const input = $("#aiText"), draft = input.value, text = draft.trim(), id = activeId;
+  if (!text || !id || aiSubmitting.has(id)) return;
+  if (!agentsInfo.agents.find((a) => a.id === curAgent())?.usable) { $("#aiSettings").open = true; return toast("Choose an available agent in Agent settings."); }
+  aiSubmitting.add(id); syncAiComposer();
+  try {
+    await api("POST", `/units/${id}/chat`, { text, agent: curAgent(), model: $("#aiModel").value || undefined, wide: $("#aiWide").checked });
+    clearSentDraft(id, draft); syncAiComposer();
+    const messages = await api("GET", `/units/${id}/chat`);
+    if (activeId === id) { thread = messages; threadUnit = null; renderThread(); }
+  } catch (e) { toast(e.message); }
+  finally { aiSubmitting.delete(id); syncAiComposer(); }
 }
 async function addComment() {
-  const text = $("#aiText").value.trim(); if (!text || !activeId) return;
-  setCard(activeId, await api("POST", `/units/${activeId}/comments`, { author: "me", text })); $("#aiText").value = ""; renderThread();
+  const input = $("#aiText"), draft = input.value, text = draft.trim(), id = activeId;
+  if (!text || !id || aiSubmitting.has(id)) return;
+  aiSubmitting.add(id); syncAiComposer();
+  try {
+    setCard(id, await api("POST", `/units/${id}/comments`, { author: "me", text }));
+    clearSentDraft(id, draft);
+    if (activeId === id) renderThread();
+  } catch (e) { toast(e.message); }
+  finally { aiSubmitting.delete(id); syncAiComposer(); }
 }
 const proseOf = (t) => esc(t).replace(/```proposal[^\n]*\n[\s\S]*?```/g, "<i>[proposal shown below]</i>");
 function renderThread() {
   const body = $("#aiBody"); if (!body) return; const c = C[activeId];
-  if (!c) { body.innerHTML = `<div class="muted small">Choose a unit to start. Replies and proposals stay with the unit. Ordinary chat never changes the manuscript.</div>`; return; }
+  const scrollTop = body.scrollTop;
+  const follow = threadUnit !== activeId || body.scrollHeight - scrollTop - body.clientHeight < 48;
+  threadUnit = activeId;
+  if (!c) { body.innerHTML = `<div class="ai-empty">${icon("ai")}<b>Select a passage</b><p>Use Ask AI on a comparison card to discuss its wording.</p></div>`; return; }
   const comments = c.comments.map((x) => `<div class="comment ${x.author === "ai" ? "ai" : ""}"><b>${esc(x.author)}</b>: ${esc(x.text)} <button class="icon-btn sm" data-delc="${x.id}" title="Delete">${icon("close")}</button></div>`).join("");
   const msgs = thread.filter((m) => !m.superseded).map((m) => {
     if (m.role === "user") return `<div class="msg user"><div class="who">You</div>${esc(m.text)}</div>`;
@@ -509,8 +617,8 @@ function renderThread() {
       ${m.status === "running" ? `<button class="btn tonal sm" data-cancel="${m.id}">${icon("stop")}Cancel</button>` : ""}${m.status === "error" || m.status === "cancelled" ? `<button class="btn tonal sm" data-retry="${m.id}">${icon("refresh")}Retry</button>` : ""}</div>
       ${stale && m.status === "done" ? '<div class="small edited-note">The candidates changed after this question was sent.</div>' : ""}${m.error ? `<div class="small">${esc(m.error)}</div>` : ""}${proseOf(m.text)}${props}</div>`;
   }).join("");
-  body.innerHTML = (comments ? `<div class="small muted">Comments</div>${comments}<hr style="border:0;border-top:1px solid var(--outline-soft)">` : "") + (msgs || '<div class="muted small">No conversation yet for this unit. Replies and proposals stay with the unit. Ordinary chat never changes the manuscript.</div>');
-  body.scrollTop = body.scrollHeight;
+  body.innerHTML = (comments ? `<div class="small muted">Comments</div>${comments}<hr style="border:0;border-top:1px solid var(--outline-soft)">` : "") + (msgs || '<div class="ai-empty">' + icon("ai") + '<b>Talk through this passage</b><p>Ask a question or pick a suggestion below. Replies stay with this passage.</p></div>');
+  body.scrollTop = follow ? body.scrollHeight : scrollTop;
   $$("[data-delc]", body).forEach((b) => (b.onclick = async () => { setCard(activeId, await api("DELETE", `/units/${activeId}/comments/${b.dataset.delc}`)); renderThread(); }));
   $$("[data-cancel]", body).forEach((b) => (b.onclick = () => api("POST", `/units/${activeId}/chat/${b.dataset.cancel}/cancel`)));
   $$("[data-retry]", body).forEach((b) => (b.onclick = async () => { await api("POST", `/units/${activeId}/chat/${b.dataset.retry}/retry`); thread = await api("GET", `/units/${activeId}/chat`); renderThread(); }));
