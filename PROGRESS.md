@@ -5,7 +5,7 @@
 - Reproduced the report against `Papers/JVer_DOGM/root.tex:282`: the `\deleted` sentence was scanned and shown in an expanded Compare card, but the inline/collapsed and **Read result** views fell back to "(removed)" because a deletion has no proposed text. Inline units now render the removed wording struck through (new `.u-gone` style, still following the Plain toggle's background rule) with a tooltip, so all three change types stay visible.
 - Fixed IEEEtran reference numbers: `\newlabel` values wrapped as `\mbox  {III-B}` were truncated by the old aux regex and printed literally. Labels are now read with brace-depth matching, and `renderTex` unwraps `\mbox {…}`; the deletion example reads "Section III-B".
 - Added a scan/article regression test covering `\added`, `\deleted` and `\replaced` as separate unit kinds and a deletion-only paragraph staying in the reading flow. 36 tests pass; `npm run check` is clean.
-- Version 0.1.10. Packaged and installed locally. Committed, pushed and tagged; GitHub release attached through the release workflow. Marketplace publishing still needs `VSCE_PAT` (repo secret or `npx @vscode/vsce login hantyou`).
+- Version 0.1.10. Packaged and installed locally. Committed, pushed and tagged; the release workflow produced [v0.1.10](https://github.com/hantyou/manuscript-review/releases/tag/v0.1.10) with `manuscript-review.vsix` attached. The Marketplace step still skips because `VSCE_PAT` is missing; run `npx @vscode/vsce login hantyou` with a Marketplace PAT, then `npm run publish`.
 
 ## 2026-11-10 — Bulk source refresh
 
