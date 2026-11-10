@@ -26,8 +26,9 @@ if (vscode) {
 export async function api(method, url, body) {
   if (!vscode) {
     const r = await fetch("/api" + url, { method, headers: { "content-type": "application/json", "x-mr": "1" }, body: body === undefined ? undefined : JSON.stringify(body) });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw Object.assign(new Error(data.error || r.statusText), { status: r.status, data });
+    const jsonBody = (r.headers.get("content-type") || "").includes("application/json");
+    const data = jsonBody ? await r.json().catch(() => ({})) : await r.text();
+    if (!r.ok) throw Object.assign(new Error((jsonBody && data.error) || data || r.statusText), { status: r.status, data });
     return data;
   }
   const id = ++nextId;

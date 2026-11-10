@@ -12,6 +12,7 @@ import { buildPlan, commitPlan, listCheckpoints, undoCheckpoint, applyEdits, rep
 import { detectAgents, startRun, buildPrompt, parseProposals, ADAPTERS } from "./agents.mjs";
 import * as B from "./build.mjs";
 import { buildArticle } from "./article.mjs";
+import { TikzRenderer } from "./tikz.mjs";
 
 const fail = (code, message, extra = {}) => Object.assign(new Error(message), { status: code, ...extra });
 
@@ -203,9 +204,27 @@ export class Session extends EventEmitter {
     return { file: su.file, fileSha: f.sha, segments: segs, previous: prev.split(/\n[ \t]*\n/).pop(), next: next.split(/\n[ \t]*\n/)[0] };
   }
 
+  _tikzIndex() {
+    const map = new Map();
+    for (const b of buildArticle(this.scan)) if (b.tikz?.key && b.tikzSrc) map.set(b.tikz.key, b.tikzSrc);
+    this.tikz = map;
+  }
+  tikzSource(key) {
+    if (!this.tikz?.has(key)) this._tikzIndex();
+    return this.tikz.get(key) || null;
+  }
+  async renderTikz(key) {
+    const tex = this.tikzSource(key);
+    if (!tex) throw fail(404, "This figure is no longer in the paper. Reopen or rescan it.");
+    this.tikzRenderer ||= new TikzRenderer({ projectDir: this.proj.dir, mainRel: this.proj.mainRel, outDir: path.join(this.proj.stateDir, "tikz") });
+    return this.tikzRenderer.render(key, tex);
+  }
+
   /** The whole paper as one article, with a card for every review unit. */
   article() {
     const blocks = buildArticle(this.scan);
+    this.tikz = new Map();
+    for (const b of blocks) if (b.tikz?.key && b.tikzSrc) { this.tikz.set(b.tikz.key, b.tikzSrc); delete b.tikzSrc; }
     const cards = {};
     for (const u of Object.values(this.R.units)) {
       if (!u.present) continue;

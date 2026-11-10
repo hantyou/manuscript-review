@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.12
+
+- Hide LaTeX comments in the reading view, cards and AI passages instead of showing them as text.
+
+## 0.1.11
+
+- Render display equations that carry `\label` or TeX conditionals instead of showing their source; standalone equations read as math, with wide lines scrollable inside the article.
+- Render TikZ figures in place as SVG using the paper's own preamble, cached by content, with the caption typeset and the source behind a disclosure.
+- Stop blank lines inside figures and tables from splitting them into several read-only blocks.
+- Fix inline math being drawn inside a box: the baseline detail style no longer matches KaTeX's internal `.base` element.
+- Keep a display equation that contains a sentence period in one piece, and hide `\label` anchors in the reading view. The article view also rejoins a split equation with its trailing `\end{...}` piece, so an already-running backend renders it after the panel reloads.
+- Preload the KaTeX math fonts so equations settle without a visible font swap.
+
 ## 0.1.10
 
 - Keep deleted-only wording visible in the inline article and in **Read result**: it is shown struck through instead of disappearing behind a "(removed)" placeholder.

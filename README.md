@@ -56,6 +56,11 @@ locally.
   instructions, or **Suggestions** for a starting prompt. Expand the passage
   heading to see its source and excerpt. Draft messages stay with their passage
   while you switch between cards; **Ctrl+Enter** / **Cmd+Enter** sends.
+- **Equations**: display math renders with KaTeX, including equation, align and
+  split environments and the paper's own macros; inline math stays in the text flow.
+- **TikZ figures**: rendered as figures in place with the paper's preamble when
+  a LaTeX installation is available. The source stays behind a **LaTeX source**
+  disclosure, and the figure is cached by content.
 - **PDF previews**: tracked or clean, from the current files or with your
   decisions applied. Built in the tool's staging folder with `latexmk`.
 - **Apply reviewed changes**: preview the patch, choose clean or tracked output,

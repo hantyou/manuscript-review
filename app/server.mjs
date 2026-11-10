@@ -28,6 +28,14 @@ export async function startServer(session, { port = 0, token = crypto.randomByte
     const S = session;
     if (p === "/project" && m === "GET") return json(res, 200, { ...S.project(), ...(await S.bibAndLabels()), katex: !!katexDir });
     if (p === "/article" && m === "GET") return json(res, 200, S.article());
+    if ((mm = p.match(/^\/tikz\/([a-f0-9]{6,40})\.svg$/)) && m === "GET") {
+      try {
+        const file = await S.renderTikz(mm[1]);
+        const buf = await fs.readFile(file);
+        res.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8", "content-length": buf.length, "cache-control": "public, max-age=31536000, immutable" });
+        return res.end(buf);
+      } catch (e) { return json(res, e.status || 422, { error: e.message }); }
+    }
     if (p === "/units" && m === "GET") return json(res, 200, Object.values(S.R.units).sort((a, b) => a.order - b.order).map((u) => S.summary(u)));
     if ((mm = p.match(/^\/units\/([^/]+)$/)) && m === "GET") return json(res, 200, S.detail(mm[1]));
     if (p === "/units/manual" && m === "POST") { const b = await body(req); const id = await S.createManual(b); return json(res, 200, { id }); }

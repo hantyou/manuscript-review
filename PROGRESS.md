@@ -1,5 +1,28 @@
 # Progress
 
+## 2026-11-10 — Save reading-view improvements
+
+- Prepared the existing math/TikZ rendering and comment-handling changes,
+  documentation, tests and version 0.1.12 for the author-requested commit and
+  push on `main`. Reran all 44 tests and `npm run check`; both pass, and
+  `git diff --check` is clean. No release tag or Marketplace publish requested.
+  Next: continue testing the reading view against manuscript sources.
+
+## 2026-11-10 — Comments stay out of the reading view
+
+- LaTeX comments were rendered as grey text in article paragraphs (for example the commented-out PSI remark after `root.tex:340`), because `renderTex` emitted a `tex-comment` span. It now skips from `%` to the line end, so comments never reach the reading view, cards, diffs or AI passages.
+- `flatten` now removes comments from its result (escaped `\%` is preserved), so a comment inside `\replaced{...}` or another markup argument can no longer become wording or part of an applied patch. `flatten` without markup also strips them.
+- Added two regression tests (44 total) and `npm run check` is clean. Version 0.1.12 packaged as `manuscript-review-0.1.12.vsix` and installed locally.
+
+## 2026-11-10 — Natural math and TikZ display
+
+- Fixed equations that fell back to raw source: `\label`, TeX conditional switches and tracked-change macros are resolved before KaTeX, and display-only paragraphs now read as math instead of read-only LaTeX blocks. Wide equations scroll inside the article.
+- Added a TikZ pipeline: `app/core/tikz.mjs` wraps the picture in `standalone` with the paper's own preamble, compiles with `pdflatex` (or `lualatex`), converts to SVG with `pdftocairo`/`dvisvgm`, and caches by content hash. The server exposes `GET /api/tikz/<key>.svg`; the UI reserves the SVG aspect ratio, loads near the viewport, and fades the figure in over a skeleton. Captions are typeset with KaTeX and the LaTeX source sits behind a disclosure.
+- Blank lines inside figures, tables and TikZ pictures no longer split them into several auxiliary blocks, and leading comments no longer hide a figure from the auxiliary-block path. Commented-out caption text is excluded.
+- Inline math is no longer drawn inside a box: the baseline detail rule now targets `details.base` instead of KaTeX's internal `span.base`. KaTeX fonts are preloaded so math settles without a visible swap.
+- `sentenceRanges` no longer ends a sentence at a period inside a display equation, which had split `\begin{equation}` from `\end{equation}` and exposed the source plus a `\label` anchor. Labels are now invisible in the reading view. The article view also merges a split display equation with its trailing `\end{...}` piece, so a panel reload fixes the view even while an older backend process is still running.
+- 42 tests pass and `npm run check` is clean. Version 0.1.11 packaged and installed locally as `manuscript-review-0.1.11.vsix`.
+
 ## 2026-11-10 — Deleted wording stays visible
 
 - Reproduced the report against `Papers/JVer_DOGM/root.tex:282`: the `\deleted` sentence was scanned and shown in an expanded Compare card, but the inline/collapsed and **Read result** views fell back to "(removed)" because a deletion has no proposed text. Inline units now render the removed wording struck through (new `.u-gone` style, still following the Plain toggle's background rule) with a tooltip, so all three change types stay visible.

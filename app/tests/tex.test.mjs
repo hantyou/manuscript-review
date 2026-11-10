@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { walk, flatten, maskComments, sentenceRanges, extractMacros, hasMarkup, extractChangesAuthors, collectChangesAuthors } from "../shared/tex.mjs";
+import { walk, flatten, maskComments, sentenceRanges, extractMacros, hasMarkup, extractChangesAuthors, collectChangesAuthors, stripMathMeta, stripComments } from "../shared/tex.mjs";
+import { renderTex } from "../public/tex-render.js";
 import { wordDiff } from "../shared/worddiff.mjs";
 import { applyEdits, replacementFor } from "../core/apply.mjs";
 import { detectChangesPackage } from "../core/build.mjs";
 import { scanProject } from "../core/scan.mjs";
-import { buildArticle } from "../core/article.mjs";
+import { buildArticle, extractTikz } from "../core/article.mjs";
 
 const nodes = (s) => { const out = []; walk(s, (e) => e.type === "node" && out.push(e)); return out; };
 
@@ -31,6 +32,22 @@ test("comments and escaped percent", () => {
 \added{shown}`;
   assert.equal(nodes(s).length, 1);
   assert.equal(maskComments(s).length, s.length);
+});
+
+test("comments never become wording", () => {
+  const s = String.raw`A % note \added{hidden}
+\replaced{new % inner note
+text}{old} B.`;
+  assert.equal(flatten(s, "new"), "A \nnew \ntext B.");
+  assert.equal(flatten(s, "old"), "A \nold B.");
+  assert.equal(stripComments(String.raw`50\% % comment`), String.raw`50\% `);
+});
+
+test("reading view omits LaTeX comments", () => {
+  const html = renderTex("Visible.% A note\nNext sentence.");
+  assert.ok(!html.includes("A note"));
+  assert.ok(html.includes("Visible."));
+  assert.ok(html.includes("Next sentence."));
 });
 
 test("macro definitions are not review units", () => {
@@ -150,4 +167,94 @@ test("changes authors are collected across scanned files", () => {
     ["extra.tex", { text: String.raw`\definechangesauthor[name={Bob}, color=green]{bob}` }],
   ]) };
   assert.deepEqual(collectChangesAuthors(scan).map((a) => a.id), ["alice", "bob"]);
+});
+
+test("math metadata is removed without touching the equation", () => {
+  const src = String.raw`\label{equ:x} L_n=\min\left\{x,\,L_{\max}\right\}, \ifdogmtrackchanges\quad\fi`;
+  assert.equal(stripMathMeta(src), String.raw` L_n=\min\left\{x,\,L_{\max}\right\}, \quad`);
+  assert.equal(stripMathMeta(String.raw`a \iff b`), String.raw`a \iff b`, "\iff is a relation, not a conditional");
+});
+
+test("a paragraph that is only a display equation reads as math", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mr-math-"));
+  try {
+    await fs.writeFile(path.join(dir, "root.tex"), String.raw`\documentclass{article}
+\begin{document}
+\begin{equation}\label{equ:one}
+y = Ax + n
+\end{equation}
+\end{document}
+`);
+    const scan = await scanProject(dir, "root.tex");
+    const block = buildArticle(scan).find((b) => b.t === "para");
+    assert.ok(block, "the equation must not be a read-only LaTeX block");
+    assert.equal(block.math, true);
+    assert.match(block.items[0].pieces[0].text, /\\begin\{equation\}/);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("TikZ blocks keep their picture and local colors", () => {
+  const raw = String.raw`\begin{figure}
+\definecolor{pfRule}{HTML}{9AA3AA}
+\centering
+\begin{tikzpicture}[box/.style={draw=pfRule}]
+\node[box] {A};
+\end{tikzpicture}
+\caption{A box.}
+\end{figure}`;
+  const t = extractTikz(raw);
+  assert.ok(t);
+  assert.match(t.tex, /\\definecolor\{pfRule\}/);
+  assert.match(t.tex, /\\begin\{tikzpicture\}/);
+  assert.match(t.tex, /\\end\{tikzpicture\}/);
+  assert.equal(t.key.length, 40);
+  assert.equal(extractTikz("plain prose"), null);
+});
+
+test("TikZ figures survive leading comments and inner blank lines", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mr-tikz-"));
+  try {
+    await fs.writeFile(path.join(dir, "root.tex"), String.raw`\documentclass{article}
+\begin{document}
+\input{fig}
+\end{document}
+`);
+    await fs.writeFile(path.join(dir, "fig.tex"), String.raw`% A commented header.
+% More context.
+
+\begin{figure}
+\definecolor{rule}{HTML}{999999}
+\centering
+\begin{tikzpicture}[box/.style={draw=rule}]
+
+\node[box] {A};
+
+\end{tikzpicture}
+\caption{A box.}
+\end{figure}
+`);
+    const scan = await scanProject(dir, "root.tex");
+    const block = buildArticle(scan).find((b) => b.tikz);
+    assert.ok(block, "the whole figure must be one aux block");
+    assert.equal(block.t, "aux");
+    assert.equal(block.tikz.key.length, 40);
+    assert.match(block.tikzSrc, /\\end\{tikzpicture\}/);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the stylesheet does not target KaTeX's internal .base spans", async () => {
+  const css = await fs.readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+  assert.ok(!/(^|\n)\.base\s*\{/.test(css), "a bare .base rule would box every equation");
+  assert.ok(/details\.base\s*\{/.test(css));
+});
+
+test("sentence ranges keep a displayed equation with a period together", () => {
+  const src = String.raw`Predictions,\begin{equation}x=a.\end{equation} Next sentence.`;
+  const r = sentenceRanges(src);
+  assert.equal(r.length, 1, "the period inside the equation must not end the sentence");
+  assert.match(src.slice(...r[0]), /\\end\{equation\}/);
 });

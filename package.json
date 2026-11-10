@@ -2,7 +2,7 @@
   "name": "manuscript-review",
   "displayName": "Manuscript Review",
   "description": "Review revisions to a LaTeX manuscript side by side, discuss passages with an AI agent, and apply only the wording you choose.",
-  "version": "0.1.10",
+  "version": "0.1.12",
   "publisher": "hantyou",
   "license": "MIT",
   "icon": "media/icon.png",

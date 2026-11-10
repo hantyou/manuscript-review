@@ -20,6 +20,7 @@ function renderReviewHtml(webview, extensionUri, appRoot) {
     .replace('<meta charset="utf-8">', `<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${csp}">`)
     .replace('href="/vendor/katex/katex.min.css"', `href="${uri("media", "katex", "katex.min.css")}"`)
     .replace('src="/vendor/katex/katex.min.js"', `src="${uri("media", "katex", "katex.min.js")}"`)
+    .replace(/href="\/vendor\/katex\/fonts\/([^"]+)"/g, (_, file) => `href="${uri("media", "katex", "fonts", file)}"`)
     .replace('href="/styles.css"', `href="${uri("app", "public", "styles.css")}"`)
     .replace('src="/app.js"', `src="${uri("app", "public", "app.js")}"`);
 }

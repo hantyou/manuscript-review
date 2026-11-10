@@ -30,6 +30,18 @@ export function maskComments(src) {
   return out.join("");
 }
 
+/** Remove comments, keeping the line break that ends each one. */
+export function stripComments(src) {
+  let out = ""; let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "\\") { out += src.slice(i, i + 2); i += 2; continue; }
+    if (c === "%") { const e = src.indexOf("\n", i); if (e < 0) return out; i = e; continue; }
+    out += c; i++;
+  }
+  return out;
+}
+
 /** Index just after the brace group starting at `i` (src[i] === "{"), or -1. */
 export function skipGroup(m, i, open = "{", close = "}") {
   if (m[i] !== open) return -1;
@@ -174,7 +186,7 @@ export function flatten(text, side) {
   const masked = maskComments(text);
   const nodes = [];
   walk(text, (ev) => { if (ev.type === "node") nodes.push(ev); }, masked);
-  if (!nodes.length) return text;
+  if (!nodes.length) return stripComments(text);
   let out = ""; let pos = 0;
   for (const n of nodes) {
     out += text.slice(pos, n.start);
@@ -189,7 +201,7 @@ export function flatten(text, side) {
     }
     out += piece; pos = n.end;
   }
-  return out + text.slice(pos);
+  return stripComments(out + text.slice(pos));
 }
 
 /** True when text still contains tracked-change commands at the top level. */
@@ -238,11 +250,33 @@ export function collectChangesAuthors(scan) {
   return out;
 }
 
+/**
+ * Remove display-only commands KaTeX rejects (\label) and TeX conditional
+ * switches, keeping the math itself. `\iff` is a relation symbol, not a switch.
+ */
+export function stripMathMeta(tex) {
+  let out = ""; let i = 0;
+  while (i < tex.length) {
+    if (tex[i] !== "\\") { out += tex[i++]; continue; }
+    const { name, end } = readCommand(tex, i);
+    if (name === "label") {
+      const j = skipWs(tex, end); const e = j < tex.length && tex[j] === "{" ? skipGroup(tex, j) : -1;
+      if (e > 0) { i = e; continue; }
+    }
+    if ((name !== "iff" && /^if[A-Za-z@]*$/.test(name)) || name === "else" || name === "fi" || name === "or" || name === "begingroup" || name === "endgroup") {
+      i = end; continue;
+    }
+    out += tex.slice(i, end); i = end;
+  }
+  return out;
+}
+
 /** Whitespace-insensitive comparison key. */
 export function norm(s) { return s.replace(/\s+/g, " ").replace(/~/g, " ").replace(/\s+/g, " ").trim(); }
 export function loose(s) { return s.replace(/%[^\n]*/g, "").replace(/[\s~]+/g, "").replace(/\\(?:,|;|!|:|space)/g, ""); }
 
 const ABBREV = /(?:e\.g|i\.e|et al|Fig|Figs|Eq|Eqs|Sec|Tab|Ref|Refs|vs|cf|approx|resp|No|Dr)$/i;
+const MATH_BLOCK = /^(?:equation|align|gather|multline|eqnarray|displaymath|math|flalign|alignat)\*?$/;
 
 /** Sentence ranges [start,end) inside `text` (end excludes trailing whitespace). */
 export function sentenceRanges(text) {
@@ -252,7 +286,29 @@ export function sentenceRanges(text) {
   i = start;
   while (i < n) {
     const c = text[i];
-    if (c === "\\") { i += 2; continue; }
+    if (c === "\\") {
+      // Never split a sentence inside a displayed equation: a period in the
+      // math would otherwise separate \begin{equation} from \end{equation}.
+      const cmd = readCommand(text, i);
+      if (cmd.name === "begin") {
+        const j = skipWs(text, cmd.end);
+        if (text[j] === "{") {
+          const e = skipGroup(text, j);
+          const env = e > 0 ? text.slice(j + 1, e - 1).trim() : "";
+          if (MATH_BLOCK.test(env)) {
+            const endTag = "\\end{" + env + "}";
+            const close = text.indexOf(endTag, e);
+            if (close >= 0) { i = close + endTag.length; continue; }
+          }
+        }
+      }
+      if (cmd.name === "[") { const close = text.indexOf("\\]", cmd.end); if (close >= 0) { i = close + 2; continue; } }
+      i = cmd.end; continue;
+    }
+    if (c === "$" && text[i + 1] === "$") { // skip display math as a unit
+      const j = text.indexOf("$$", i + 2);
+      if (j > 0) { i = j + 2; continue; }
+    }
     if (c === "$") { // skip inline math as a unit
       const j = text.indexOf("$", i + 1);
       if (j > 0) { i = j + 1; continue; }

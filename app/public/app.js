@@ -178,9 +178,85 @@ function cardMatch(c) {
 const filtering = () => filter !== "all" || !!query;
 function renderFilters() { $("#filters").innerHTML = FILTERS.map(([k, l]) => `<button class="chip ${filter === k ? "on" : ""}" data-filter="${k}">${l}</button>`).join(""); }
 
+// ---------- TikZ figures ----------
+// The server compiles a picture once and caches the SVG by content hash. The
+// frame reserves the picture's aspect ratio before the image fades in, so the
+// article does not jump when a figure arrives.
+const tikzCache = new Map();
+let tikzObserver = null;
+function svgSize(text) {
+  const w = /<svg\b[^>]*\bwidth="([\d.]+)/i.exec(text);
+  const h = /<svg\b[^>]*\bheight="([\d.]+)/i.exec(text);
+  if (w && h) return { w: +w[1], h: +h[1] };
+  const vb = /viewBox="\s*[-.\d]+\s+[-.\d]+\s+([\d.]+)\s+([\d.]+)\s*"/i.exec(text);
+  return vb ? { w: +vb[1], h: +vb[2] } : {};
+}
+function observeTikz(frame) {
+  if (!("IntersectionObserver" in window)) { loadTikz(frame); return; }
+  tikzObserver ||= new IntersectionObserver((entries, obs) => {
+    for (const e of entries) if (e.isIntersecting) { obs.unobserve(e.target); loadTikz(e.target); }
+  }, { root: $("#article"), rootMargin: "600px 0px" });
+  tikzObserver.observe(frame);
+}
+async function loadTikz(frame) {
+  if (frame.dataset.loading) return;
+  frame.dataset.loading = "1";
+  try {
+    let item = tikzCache.get(frame.dataset.tikz);
+    if (!item) {
+      const svg = await api("GET", `/tikz/${frame.dataset.tikz}.svg`);
+      if (typeof svg !== "string" || !/<svg[\s>]/i.test(svg)) throw new Error("No figure preview returned.");
+      item = { url: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg), ...svgSize(svg) };
+      tikzCache.set(frame.dataset.tikz, item);
+    }
+    if (item.w && item.h) frame.style.aspectRatio = `${item.w} / ${item.h}`;
+    const img = document.createElement("img");
+    img.alt = frame.dataset.alt || "TikZ figure";
+    img.decoding = "async";
+    img.onload = () => { frame.querySelector(".tikz-state")?.remove(); frame.classList.add("ready"); };
+    img.onerror = () => tikzFail(frame);
+    img.src = item.url;
+    frame.appendChild(img);
+  } catch (e) {
+    tikzFail(frame, e.message);
+  }
+}
+function tikzFail(frame, message) {
+  frame.classList.add("failed");
+  const s = frame.querySelector(".tikz-state") || frame.appendChild(document.createElement("span"));
+  s.className = "tikz-state";
+  s.textContent = "Figure preview unavailable. The LaTeX source is shown below.";
+  if (message) s.title = message;
+  const block = frame.closest(".tikz-block");
+  block?.classList.add("tikz-failed");
+  const src = block?.querySelector(".tikz-src"); if (src) src.open = true;
+}
+
+
+// Older backends could split a display equation at a period inside the math.
+// Merge the trailing continuation into the opening piece before rendering.
+const DISPLAY_OPEN = /\\begin\s*\{(equation\*?|align\*?|gather\*?|multline\*?|eqnarray\*?|displaymath)\}/g;
+const DISPLAY_CLOSE = /\\end\s*\{(equation\*?|align\*?|gather\*?|multline\*?|eqnarray\*?|displaymath)\}/g;
+const displayDepth = (s) => (s.match(DISPLAY_OPEN) || []).length - (s.match(DISPLAY_CLOSE) || []).length;
+function piecesHtml(pieces, b) {
+  const merged = [];
+  for (let i = 0; i < pieces.length; i++) {
+    let p = pieces[i];
+    let depth = displayDepth(p.text);
+    if (depth > 0) {
+      let text = p.text; let j = i + 1;
+      while (depth > 0 && j < pieces.length && pieces[j].start == null) { text += pieces[j].text; depth = displayDepth(text); j++; }
+      if (depth === 0) { p = { ...p, text }; i = j - 1; }
+    }
+    merged.push(p);
+  }
+  return merged.map((p) => (p.start != null ? `<span class="sent" data-f="${esc(b.file)}" data-s="${p.start}" data-e="${p.end}" data-sha="${b.fileSha}">${R(p.text)}</span>` : R(p.text))).join("");
+}
+
 // ---------- article ----------
 function renderDoc() {
   const token = ++renderToken; const doc = $("#doc"); const anchor = firstVisibleBlock();
+  tikzObserver?.disconnect(); tikzObserver = null;
   doc.innerHTML = ""; blockEls = [];
   const queue = []; let i = 0;
   while (i < A.blocks.length) {
@@ -218,17 +294,22 @@ function blockEl(i) {
   const b = A.blocks[i]; let el;
   if (b.t === "heading") {
     el = document.createElement("h2"); el.className = `h l${Math.min(b.level || 1, 4)}`; el.id = "h-" + b.idx; el.dataset.h = b.idx; el.innerHTML = R(b.title);
+  } else if (b.t === "aux" && b.tikz) {
+    el = document.createElement("figure"); el.className = "tikz-block";
+    el.innerHTML = `<div class="tikz-frame" data-tikz="${esc(b.tikz.key)}" data-alt="${esc(b.caption || "TikZ figure")}"><span class="tikz-state">Rendering figure…</span></div>${b.caption ? `<figcaption>${R(b.caption)}</figcaption>` : ""}${b.units.length ? '<div class="cards"></div>' : ""}<details class="tikz-src"><summary>${icon("image")}<b>Figure</b><span>LaTeX source</span><span class="spacer"></span><span class="small">${esc(b.file)}:${b.line}</span></summary><pre>${esc(b.src)}</pre></details>`;
+    const host = $(".cards", el); if (host) for (const id of b.units) host.appendChild(unitNode(id));
+    observeTikz($(".tikz-frame", el));
   } else if (b.t === "aux") {
     el = document.createElement("details"); el.className = "aux";
     el.innerHTML = `<summary>${icon(b.kind === "Table" ? "db" : "folder")}<b>${esc(b.kind)}</b><span>${esc(b.caption || "Read-only LaTeX block").slice(0, 140)}</span><span class="spacer"></span><span class="small">${esc(b.file)}:${b.line}</span></summary>${b.units.length ? '<div class="cards"></div>' : ""}<pre>${esc(b.src)}</pre>`;
     const host = $(".cards", el); if (host) for (const id of b.units) host.appendChild(unitNode(id));
     if (b.units.length) el.open = true;
   } else {
-    el = document.createElement("section"); el.className = "para";
+    el = document.createElement("section"); el.className = "para" + (b.math ? " math-block" : "");
     let html = "";
     const flush = () => { if (html) { const p = document.createElement("p"); p.className = "run"; p.innerHTML = html; el.appendChild(p); html = ""; } };
     for (const it of b.items) {
-      if (it.t === "text") html += it.pieces.map((p) => (p.start != null ? `<span class="sent" data-f="${esc(b.file)}" data-s="${p.start}" data-e="${p.end}" data-sha="${b.fileSha}">${R(p.text)}</span>` : R(p.text))).join("");
+      if (it.t === "text") html += piecesHtml(it.pieces, b);
       else { const n = unitNode(it.id); if (n.tagName === "ARTICLE") { flush(); el.appendChild(n); } else html += n.outerHTML; }
     }
     flush();
