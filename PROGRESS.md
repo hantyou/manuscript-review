@@ -5,7 +5,7 @@
 - Added **Update all from source (N)** to the top bar. It appears only when at least one card is marked source changed, and copies the current file wording into every such card through the new `Session.takeSourceAll()` and `POST /api/units/take-source-all`.
 - The single-card **Source changed. Use it** path is unchanged. The button count refreshes after loads, rescans and individual source updates.
 - New test in `app/tests/sync.test.mjs` updates two `\replaced` units after an external save and confirms a second click has nothing to do; 35 tests pass and `npm run check` is clean.
-- Version 0.1.9. Packaged, committed, pushed and sent to the Marketplace from this session (see the bottom of this entry for the result).
+- Version 0.1.9. Packaged, installed locally, committed and pushed. The Marketplace publish failed: no `VSCE_PAT` is set, `~/.vsce` has no publisher token, and the `--azure-credential` fallback has no Azure CLI or Entra credentials in this environment. Next: run `npx @vscode/vsce login hantyou` with a Marketplace PAT, then `npm run publish`.
 
 ## 2026-11-09 — Automatic source sync
 
