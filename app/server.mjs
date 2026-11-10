@@ -5,6 +5,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { detectAgents } from "./core/agents.mjs";
+import { watchSources } from "./core/watch.mjs";
 import { configDir, readJson, writeJson } from "./core/store.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,7 @@ export async function startServer(session, { port = 0, token = crypto.randomByte
     if ((mm = p.match(/^\/units\/([^/]+)\/candidate\/(original|proposed|custom)\/(undo|redo|restore)$/)) && m === "POST") return json(res, 200, S.candAction(mm[1], mm[2], mm[3]));
     if ((mm = p.match(/^\/units\/([^/]+)\/decision$/)) && m === "PUT") { const b = await body(req); return json(res, 200, S.decide(mm[1], b.choice, b.custom)); }
     if ((mm = p.match(/^\/units\/([^/]+)\/decision\/undo$/)) && m === "POST") return json(res, 200, S.undoDecision(mm[1]));
+    if (p === "/units/take-source-all" && m === "POST") return json(res, 200, S.takeSourceAll());
     if ((mm = p.match(/^\/units\/([^/]+)\/take-source$/)) && m === "POST") return json(res, 200, S.takeSource(mm[1]));
     if ((mm = p.match(/^\/units\/([^/]+)\/comments$/)) && m === "POST") { const b = await body(req); return json(res, 200, S.addComment(mm[1], b.author || "me", b.text)); }
     if ((mm = p.match(/^\/units\/([^/]+)\/comments\/([^/]+)$/)) && m === "DELETE") return json(res, 200, S.deleteComment(mm[1], mm[2]));
@@ -121,5 +123,7 @@ export async function startServer(session, { port = 0, token = crypto.randomByte
   });
   await new Promise((r) => server.listen(port, "127.0.0.1", r));
   const actual = server.address().port;
-  return { server, port: actual, token, url: `http://127.0.0.1:${actual}/?t=${token}`, close: () => new Promise((r) => { for (const c of sse) c.end(); server.close(r); server.closeAllConnections?.(); }) };
+  // Keep the open review in step with saves made in an editor.
+  const watcher = watchSources(session);
+  return { server, port: actual, token, url: `http://127.0.0.1:${actual}/?t=${token}`, close: () => new Promise((r) => { watcher.stop(); for (const c of sse) c.end(); server.close(r); server.closeAllConnections?.(); }) };
 }

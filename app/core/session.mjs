@@ -23,6 +23,7 @@ export class Session extends EventEmitter {
     this.review = new Persist(path.join(proj.stateDir, "review.json"), { version: 1, units: {}, manual: [], baseline: null, snapshot: null, settings: {} });
     this.chats = new Persist(path.join(proj.stateDir, "chats.json"), { threads: {}, project: [] });
     this.runs = new Map(); this.jobs = new Map(); this.matchCache = new Map();
+    this.writing = false;
   }
   get R() { return this.review.data; }
 
@@ -72,7 +73,7 @@ export class Session extends EventEmitter {
   }
 
   /** Re-read the sources and merge them into the saved review. */
-  async rescan(first = false) {
+  async rescan(first = false, info = {}) {
     const scan = await scanProject(this.proj.dir, this.proj.mainRel);
     const R = this.R;
     // Manual (unmarked) passages are re-located by content and context.
@@ -97,7 +98,7 @@ export class Session extends EventEmitter {
     await this._matchAll();
     // Remember the file hashes this scan reflects.
     this.scanHashes = Object.fromEntries([...scan.files].map(([r, f]) => [r, f.sha]));
-    this.review.touch(); this._broadcast({ type: "scan" });
+    this.review.touch(); this._broadcast({ type: "scan", ...info });
     return scan;
   }
   _para(text, s, e) { return scanProjectParagraph(text, s, e); }
@@ -279,6 +280,15 @@ export class Session extends EventEmitter {
   }
   undoDecision(id) { const u = this.unit(id); M.undoDecision(u); this.save(); return this.detail(id); }
   takeSource(id) { const u = this.unit(id); M.takeSource(u); this.save(); return this.detail(id); }
+  takeSourceAll() {
+    const ids = [];
+    for (const u of Object.values(this.R.units)) {
+      if (!u.present || !u.sourceChanged) continue;
+      if (M.takeSource(u)) ids.push(u.id);
+    }
+    if (ids.length) this.save();
+    return { updated: ids.length, ids };
+  }
   addComment(id, author, text) {
     const u = this.unit(id); u.comments.push({ id: M.rid("c"), author, text, ts: M.now() }); this.save(); return this.detail(id);
   }
@@ -315,20 +325,30 @@ export class Session extends EventEmitter {
     if (!this._lastPlan || this._lastPlan.plan.token !== token) throw fail(409, "The preview is out of date. Preview again.");
     const { plan, fresh } = this._lastPlan;
     let manifest;
-    try { manifest = await commitPlan(this.proj, fresh, plan); }
-    catch (e) { throw fail(e.code === "STALE" ? 409 : 500, e.message); }
-    for (const p of plan.patches) {
-      const u = this.R.units[p.unitId];
-      u.applied = { checkpointId: manifest.id, ts: manifest.ts, text: p.text, mode: plan.mode };
-    }
-    this.review.touch(); this._lastPlan = null;
-    await this.rescan();
+    // Hold the source watcher off until the post-apply rescan has settled.
+    this.writing = true;
+    try {
+      try { manifest = await commitPlan(this.proj, fresh, plan); }
+      catch (e) { throw fail(e.code === "STALE" ? 409 : 500, e.message); }
+      for (const p of plan.patches) {
+        const u = this.R.units[p.unitId];
+        u.applied = { checkpointId: manifest.id, ts: manifest.ts, text: p.text, mode: plan.mode };
+      }
+      this.review.touch(); this._lastPlan = null;
+      await this.rescan();
+    } finally { this.writing = false; }
     return manifest;
   }
   async undoApply(id, force) {
-    const m = await undoCheckpoint(this.proj, id, force).catch((e) => { throw fail(e.code === "STALE" ? 409 : 500, e.message, { conflicts: e.conflicts }); });
-    for (const u of Object.values(this.R.units)) if (u.applied?.checkpointId === id) u.applied = null;
-    await this.rescan(); return m;
+    let m;
+    this.writing = true;
+    try {
+      m = await undoCheckpoint(this.proj, id, force)
+        .catch((e) => { throw fail(e.code === "STALE" ? 409 : 500, e.message, { conflicts: e.conflicts }); });
+      for (const u of Object.values(this.R.units)) if (u.applied?.checkpointId === id) u.applied = null;
+      await this.rescan();
+    } finally { this.writing = false; }
+    return m;
   }
   checkpoints() { return listCheckpoints(this.proj); }
 

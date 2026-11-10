@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.9
+
+- Add **Update all from source**, which copies the wording now in the file into every card marked as source changed in one click.
+
+## 0.1.8
+
+- Re-read the paper when it is saved outside the tool, so cards, counts, citations and the open conversation follow within about two seconds.
+- Pause that watcher while the tool writes an apply or undo, and defer the UI reload while a card edit or dialog is open.
+
 ## 0.1.7
 
 - Add OpenCode as an AI source: detect its sign-in, list the models from `opencode models`, and label the entry for the model in your OpenCode config.

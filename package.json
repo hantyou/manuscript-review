@@ -2,7 +2,7 @@
   "name": "manuscript-review",
   "displayName": "Manuscript Review",
   "description": "Review revisions to a LaTeX manuscript side by side, discuss passages with an AI agent, and apply only the wording you choose.",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "publisher": "hantyou",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -116,7 +116,7 @@
     }
   },
   "scripts": {
-    "test": "node --test app/tests/tex.test.mjs app/tests/agents.test.mjs",
+    "test": "node --test app/tests/tex.test.mjs app/tests/agents.test.mjs app/tests/sync.test.mjs",
     "check": "node --check extension/extension.js && node --check extension/review-panel.js && node --check extension/html.js",
     "package": "npx --yes @vscode/vsce package",
     "publish": "npx --yes @vscode/vsce publish"

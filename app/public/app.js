@@ -51,6 +51,7 @@ function initChrome() {
   $("#prevPending").innerHTML = icon("prev") + " Previous"; $("#nextPending").innerHTML = "Next pending " + icon("next");
   $("#hideHl").checked = view.hide; $("#srcMode").checked = view.src; $("#changesOnly").checked = view.changes;
   document.body.classList.toggle("nohl", view.hide); setTheme(); applyPanels(); markMode();
+  $("#btnSyncSources").onclick = syncAllSources;
   document.addEventListener("pointerdown", (e) => { const b = e.target.closest(".btn,.icon-btn,.seg button"); if (!b || b.disabled) return; const r = b.getBoundingClientRect(); const s = document.createElement("span"); const d = Math.max(r.width, r.height); s.className = "ripple"; s.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px`; b.appendChild(s); setTimeout(() => s.remove(), 600); });
   document.addEventListener("click", (e) => { const a = e.target.closest('a[href^="/api/build/"][target="_blank"]'); if (!a) return; e.preventDefault(); openPdf(a.getAttribute("href")); });
 }
@@ -72,6 +73,7 @@ async function boot() {
       if (activeId === id) { thread = messages; renderThread(); }
     }
     if (ev.type === "build") renderPreviewModal(true);
+    if (ev.type === "scan" && ev.auto) reloadSources(ev.files);
   });
   window.addEventListener("focus", afterMutation); setInterval(afterMutation, 20000); afterMutation();
 }
@@ -117,7 +119,49 @@ async function loadArticle() {
   order = []; unitBlock = {};
   A.blocks.forEach((b, i) => { for (const id of unitsOf(b)) { order.push(id); unitBlock[id] = i; } });
   for (const id of A.orphans || []) order.push(id);
-  renderDoc(); renderOutline(); renderFilters();
+  renderDoc(); renderOutline(); renderFilters(); updateSourceSyncButton();
+}
+function updateSourceSyncButton() {
+  const b = $("#btnSyncSources"); if (!b) return;
+  const n = Object.values(C).filter((c) => c.sourceChangedInfo).length;
+  b.hidden = n === 0;
+  b.textContent = `Update all from source (${n})`;
+  b.title = `Copy the wording now in the file into all ${n} card${n === 1 ? "" : "s"} marked as source changed`;
+}
+async function syncAllSources() {
+  const b = $("#btnSyncSources"); const n = Object.values(C).filter((c) => c.sourceChangedInfo).length;
+  if (!n) return toast("No cards have a changed source.");
+  b.disabled = true;
+  try {
+    const r = await api("POST", "/units/take-source-all");
+    await loadProject(); await loadArticle();
+    toast(`Updated ${r.updated} card${r.updated === 1 ? "" : "s"} with the wording now in the file.`);
+  } catch (e) { toast(e.message); }
+  finally { b.disabled = false; updateSourceSyncButton(); }
+}
+let reloadingSources = false, reloadSourcesTimer = null, lastSourceNote = 0;
+/** The paper was saved outside the tool: re-read it without losing the current card. */
+async function reloadSources(files) {
+  // Never discard a card edit or an open dialog; look again a moment later.
+  if (openEd.size || !$("#modal").hidden) {
+    clearTimeout(reloadSourcesTimer);
+    reloadSourcesTimer = setTimeout(() => reloadSources(files), 2000);
+    return;
+  }
+  if (reloadingSources) return;
+  reloadingSources = true;
+  try {
+    const cur = activeId;
+    await loadProject(); await loadArticle();
+    if (cur && C[cur]) await setActive(cur);
+    else { activeId = null; renderAiHead(); renderThread(); }
+    // Editors with autosave save often; one short note per burst is enough.
+    if (Date.now() - lastSourceNote > 4000) {
+      lastSourceNote = Date.now();
+      toast(files?.length ? `Sources changed (${files.join(", ")}). Re-read them.` : "Sources re-read.");
+    }
+  } catch (e) { toast(e.message); }
+  finally { reloadingSources = false; }
 }
 const unitsOf = (b) => (b.t === "para" ? b.items.filter((x) => x.t === "unit").map((x) => x.id) : b.t === "aux" ? b.units : []);
 
@@ -270,7 +314,7 @@ function refreshUnit(id) {
     if (el.classList.contains("ucard") && !collapsed.has(id)) fillCard(el);
     else el.replaceWith(unitNode(id));
   });
-  renderOutline(); renderProgress();
+  renderOutline(); renderProgress(); updateSourceSyncButton();
 }
 function setCard(id, d) { C[id] = d; refreshUnit(id); if (id === activeId) renderAiHead(); }
 

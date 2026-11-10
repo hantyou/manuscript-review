@@ -64,6 +64,15 @@ locally.
 Keyboard: `j` / `k` or `Alt+↓` / `Alt+↑` next or previous pending change,
 `/` search, `Esc` closes dialogs.
 
+Saves you make to the paper in your editor are folded into the open review
+automatically: cards, counts, citations and the conversation follow within about
+two seconds, without pressing **Rescan sources**. The watcher pauses while the
+tool itself writes an apply or undo, and while a card edit or dialog is open.
+
+When external edits make several cards report **Source changed**, the top bar
+shows **Update all from source (N)**: one click copies the wording now in the
+file into all N cards, instead of using each card's button.
+
 ### Supported AI agents
 
 The panel uses whichever of these CLIs is installed and signed in on the machine
