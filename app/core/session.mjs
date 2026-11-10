@@ -248,7 +248,17 @@ export class Session extends EventEmitter {
       }
     }
     const aux = await readText(path.join(this.proj.dir, this.proj.mainRel.replace(/\.tex$/i, ".aux")), "");
-    for (const l of aux.matchAll(/\\newlabel\{([^}]+)\}\{\{([^}]*)\}/g)) labels[l[1]] = l[2];
+    // \newlabel{name}{{value}{page}{title}...}; the value may contain braces,
+    // e.g. IEEEtran writes \mbox  {III-B}, so match braces by depth.
+    for (const l of aux.matchAll(/\\newlabel\{([^}]+)\}\{/g)) {
+      const open = l.index + l[0].length - 1;
+      const end = skipGroup(aux, open);
+      if (end < 0) continue;
+      const inner = aux.slice(open + 1, end - 1);
+      if (inner[0] !== "{") continue;
+      const valueEnd = skipGroup(inner, 0);
+      if (valueEnd > 0) labels[l[1]] = inner.slice(1, valueEnd - 1);
+    }
     return { bib, labels };
   }
 

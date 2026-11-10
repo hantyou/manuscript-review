@@ -1,9 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { walk, flatten, maskComments, sentenceRanges, extractMacros, hasMarkup, extractChangesAuthors, collectChangesAuthors } from "../shared/tex.mjs";
 import { wordDiff } from "../shared/worddiff.mjs";
 import { applyEdits, replacementFor } from "../core/apply.mjs";
 import { detectChangesPackage } from "../core/build.mjs";
+import { scanProject } from "../core/scan.mjs";
+import { buildArticle } from "../core/article.mjs";
 
 const nodes = (s) => { const out = []; walk(s, (e) => e.type === "node" && out.push(e)); return out; };
 
@@ -112,6 +117,31 @@ test("changes authors are extracted from definechangesauthor", () => {
     { id: "alice", name: "Alice", color: "blue" },
     { id: "bob", name: "", color: "red" },
   ]);
+});
+
+test("scan detects added, deleted and replaced markup as separate unit kinds", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mr-scan-"));
+  try {
+    await fs.writeFile(path.join(dir, "root.tex"), String.raw`\documentclass{article}
+\begin{document}
+\deleted{A removed sentence.}
+
+\added{A new sentence.}
+
+\replaced{New wording.}{Old wording.}
+\end{document}
+`);
+    const scan = await scanProject(dir, "root.tex");
+    assert.deepEqual(scan.units.map((u) => u.kind), ["delete", "add", "replace"]);
+    const del = scan.units[0];
+    assert.equal(del.orig, "A removed sentence.");
+    assert.equal(del.prop, "");
+    const block = buildArticle(scan).find((b) => (b.items || []).some((i) => i.t === "unit" && i.id === del.id));
+    assert.equal(block.t, "para", "a deletion-only paragraph must stay in the reading flow");
+    assert.ok(block.items.some((i) => i.t === "unit" && i.id === del.id));
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("changes authors are collected across scanned files", () => {

@@ -107,6 +107,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .u-inline.st-decided { border-bottom: 2px solid var(--ok); background: color-mix(in srgb, var(--ok-container) 55%, transparent); } .u-inline.st-stale { border-bottom-color: var(--bad); }
 .u-inline.st-applied { border-bottom: 0; background: none; } .u-inline:hover { filter: brightness(.95); }
 .nohl .u-inline { background: none; }
+/* Deleted-only reading: keep the removed wording visible in the inline flow. */
+.u-inline .u-gone { color: var(--del-ink); background: var(--del-bg); border-radius: 3px; padding: 0 1px; text-decoration: line-through; text-decoration-thickness: 1px; text-decoration-color: currentColor; }
+.nohl .u-inline .u-gone { background: none; }
 
 /* Comparison card */
 .ucard { margin: 10px 0 18px; background: var(--card); border: 1px solid var(--outline-soft); border-left: 5px solid var(--warn); border-radius: var(--r-lg); box-shadow: var(--shadow1); transition: box-shadow .2s, border-color .2s; scroll-margin-top: 80px; }

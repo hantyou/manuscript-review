@@ -74,7 +74,11 @@ export function renderTex(src, env = {}) {
     }
     if (REF.test(name)) {
       const a = argAt(src, j);
-      if (a) { const num = labels[a[0].trim()]; out += `<span class="ref${num ? "" : " missing"}" title="${esc(a[0])}">${name === "eqref" ? "(" : ""}${esc(num || a[0])}${name === "eqref" ? ")" : ""}</span>`; i = a[1]; continue; }
+      if (a) {
+        // IEEEtran .aux files wrap numbers as \mbox  {III-B}; show the number only.
+        const num = (labels[a[0].trim()] || "").replace(/^\\mbox\s*\{([^{}]*)\}$/, "$1").trim();
+        out += `<span class="ref${num ? "" : " missing"}" title="${esc(a[0])}">${name === "eqref" ? "(" : ""}${esc(num || a[0])}${name === "eqref" ? ")" : ""}</span>`; i = a[1]; continue;
+      }
     }
     if (name === "label") { const a = argAt(src, j); if (a) { out += `<span class="label" title="label ${esc(a[0])}">⚓</span>`; i = a[1]; continue; } }
     if (SIMPLE[name]) {

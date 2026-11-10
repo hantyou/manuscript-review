@@ -241,10 +241,16 @@ function unitNode(id) {
   const card = (view.mode === "compare" && (!filtering() || cardMatch(c))) || forceCard.has(id);
   if (card && !collapsed.has(id)) return cardEl(id);
   const s = document.createElement("span"); s.className = `u-inline st-${c.status}${collapsed.has(id) ? " collapsed" : ""}`; s.dataset.id = id; s.dataset.unit = id;
-  s.innerHTML = R(finalText(c)) || "<i>(removed)</i>";
-  s.title = collapsed.has(id)
+  const final = finalText(c);
+  // A deletion leaves no proposed text. Show the removed wording struck through
+  // so the content is never invisible in the inline reading view.
+  const deletedOnly = !final && c.kind === "delete" && !!c.original.text.trim();
+  if (deletedOnly) s.innerHTML = `<span class="u-gone">${R(c.original.text)}</span>`;
+  else s.innerHTML = R(final) || "<i>(removed)</i>";
+  const hint = deletedOnly ? "Deleted wording shown struck through. " : "";
+  s.title = hint + (collapsed.has(id)
     ? `Collapsed · ${c.status}${c.decision ? " · " + c.decision.choice : ""}. Click to expand`
-    : `${c.status}${c.decision ? " · " + c.decision.choice : ""}. Click to compare`;
+    : `${c.status}${c.decision ? " · " + c.decision.choice : ""}. Click to compare`);
   return s;
 }
 const finalText = (c) => (c.status === "applied" && c.applied ? c.applied.text : c.decision && ["decided", "stale"].includes(c.status) ? c.decision.text : c.proposed.text);

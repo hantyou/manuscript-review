@@ -43,7 +43,9 @@ locally.
 - **Outline** (left): headings with the number still pending, search, status
   filters and **Next pending**.
 - **Compare / Read result**: compare every change, or read the article as it
-  stands with the wording chosen so far.
+  stands with the wording chosen so far. A deletion has no proposed wording,
+  so collapsed and result views keep the removed text visible, struck through,
+  instead of hiding what was deleted.
 - **Comparison card**: original wording on the left, proposed wording on the
   right, with word-level highlights. Decide, edit or ask the AI about it.
   **Use original** / **Use proposed** collapse the card to inline text; the

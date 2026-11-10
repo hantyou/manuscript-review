@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.10
+
+- Keep deleted-only wording visible in the inline article and in **Read result**: it is shown struck through instead of disappearing behind a "(removed)" placeholder.
+- Show IEEEtran reference numbers such as **III-B** without the surrounding `\mbox {…}` markup.
+- Cover `\added`, `\deleted` and `\replaced` detection and deletion-only paragraph placement in the test suite.
+
 ## 0.1.9
 
 - Add **Update all from source**, which copies the wording now in the file into every card marked as source changed in one click.
