@@ -1,5 +1,11 @@
 # Progress
 
+## 2026-11-11 — Stale applied state on duplicate units
+
+- Reported against `Papers/JVer_DOGM/root.tex:545`: a card showed **Applied** with disabled actions while `\replaced{0}{1}` was still in the source. A clean apply had cleaned three other identical occurrence units; when those disappeared, the surviving occurrence was rescanned as `u_80ae308142` and `syncUnits` matched it by ID to the applied state, so `statusOf` kept returning applied.
+- `syncUnits` now clears `applied` when a fresh scan still finds a unit that was applied in clean mode (tracked applies legitimately remain in the source). Manual units are left alone. Added two regression tests; 46 tests pass and `npm run check` is clean.
+- Not packaged or version-bumped; restart the local server/extension to load the fix. Next: verify the affected card reopens as pending or decided after reload.
+
 ## 2026-11-10 — Save reading-view improvements
 
 - Prepared the existing math/TikZ rendering and comment-handling changes,

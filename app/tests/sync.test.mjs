@@ -6,6 +6,7 @@ import path from "node:path";
 import { watchSources } from "../core/watch.mjs";
 import { prepareProject } from "../core/open.mjs";
 import { Session } from "../core/session.mjs";
+import { syncUnits } from "../core/model.mjs";
 
 process.env.MR_TOOLS_DIR = await fs.mkdtemp(path.join(os.tmpdir(), "mr-sync-state-"));
 
@@ -116,4 +117,24 @@ test("takeSourceAll refreshes every unit whose source changed", async () => {
     assert.deepEqual(proposed, ["new A v2", "new C v2"]);
     assert.equal(session.takeSourceAll().updated, 0, "a second click has nothing left to do");
   } finally { session.review.flush(); }
+});
+
+test("a clean-applied unit found again is treated as unapplied", () => {
+  const su = (start, id = "u_dup") => ({ id, kind: "replace", file: "root.tex", start, end: start + 16, srcText: String.raw`\replaced{0}{1}`, orig: "1", prop: "0", srcSha: "src" });
+  const review = { units: {} };
+  syncUnits(review, { units: [su(10), su(50, "u_dup_2")] });
+  review.units.u_dup.applied = { checkpointId: "c1", ts: "t", text: "0", mode: "clean" };
+  // The first occurrence was cleaned; only the second remains and reuses the first id.
+  syncUnits(review, { units: [su(50)] });
+  assert.equal(review.units.u_dup.applied, null);
+  assert.equal(review.units.u_dup.present, true);
+});
+
+test("a tracked apply keeps its applied state while the markup remains", () => {
+  const su = (start, id = "u_dup") => ({ id, kind: "replace", file: "root.tex", start, end: start + 16, srcText: String.raw`\replaced{0}{1}`, orig: "1", prop: "0", srcSha: "src" });
+  const review = { units: {} };
+  syncUnits(review, { units: [su(10), su(50, "u_dup_2")] });
+  review.units.u_dup.applied = { checkpointId: "c1", ts: "t", text: "0", mode: "tracked" };
+  syncUnits(review, { units: [su(10)] });
+  assert.equal(review.units.u_dup.applied?.mode, "tracked");
 });

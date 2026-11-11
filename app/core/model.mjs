@@ -87,6 +87,9 @@ export function syncUnits(review, scan, manualScan = []) {
     }
     if (!eu) { eu = createUnit(su, idx); review.units[eu.id] = eu; }
     claimed.add(eu.id);
+    // A clean apply removes the markup from the source. A fresh scan that still
+    // finds it has matched another, unapplied occurrence that reused the id.
+    if (eu.applied?.mode === "clean" && eu.kind !== "manual") eu.applied = null;
     eu.present = true; eu.file = su.file; eu.order = idx; eu.srcSha = su.srcSha; eu.kind = su.kind;
     if (su.orig !== eu.imported.original || su.prop !== eu.imported.proposed) eu.sourceChanged = { original: su.orig, proposed: su.prop, srcText: su.srcText };
     else delete eu.sourceChanged;
