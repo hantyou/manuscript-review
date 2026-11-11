@@ -1,5 +1,10 @@
 # Progress
 
+## 2026-11-11 — VS Code: spawn EINVAL when opening the panel
+
+- Fixed the review panel failing with `Could not start: spawn EINVAL` on Windows in the VS Code extension host. npm-installed agent CLIs resolve to `.cmd` shims, and Node throws `EINVAL` synchronously when such a shim is spawned without a shell (CVE-2024-27980). The `exec` helper now passes `shell: true` for `.cmd`/`.bat` and converts a synchronous throw into a failed probe, so agent detection can no longer abort `GET /agents`; `startRun` uses the same rule.
+- 44 tests pass (`sync.test.mjs` needed a rerun for one pre-existing timing flake) and `npm run check` is clean. Also patched the locally installed 0.1.10 copy under `~/.vscode/extensions`; reload the VS Code window to pick it up.
+
 ## 2026-11-11 — Stale applied state on duplicate units
 
 - Reported against `Papers/JVer_DOGM/root.tex:545`: a card showed **Applied** with disabled actions while `\replaced{0}{1}` was still in the source. A clean apply had cleaned three other identical occurrence units; when those disappeared, the surviving occurrence was rescanned as `u_80ae308142` and `syncUnits` matched it by ID to the applied state, so `statusOf` kept returning applied.

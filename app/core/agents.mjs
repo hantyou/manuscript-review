@@ -146,8 +146,15 @@ export const ADAPTERS = {
 };
 
 const cache = { at: 0, value: null };
+// Node throws EINVAL synchronously when a .cmd/.bat shim is spawned without a
+// shell (CVE-2024-27980). That is exactly what the extension host gets on
+// Windows, where npm CLIs resolve to their .cmd shim.
+const shellFor = (file) => process.platform === "win32" && /\.(cmd|bat)$/i.test(file);
 const exec = (file, args, ms = 15000) => new Promise((res) => {
-  execFile(file, args, { timeout: ms, windowsHide: true }, (err, stdout, stderr) => res({ ok: !err, out: String(stdout || "") + String(stderr || ""), stdout: String(stdout || "") }));
+  const fail = () => res({ ok: false, out: "", stdout: "" });
+  try {
+    execFile(file, args, { timeout: ms, windowsHide: true, shell: shellFor(file) }, (err, stdout, stderr) => res({ ok: !err, out: String(stdout || "") + String(stderr || ""), stdout: String(stdout || "") }));
+  } catch { fail(); }
 });
 
 export async function detectAgents(force = false) {
@@ -186,7 +193,7 @@ export function startRun({ agent, prompt, cwd, model, readFiles, onText, onMeta,
   const exe = resolveExecutable(a.command);
   if (!exe) throw new Error(`${a.label} was not found on PATH.`);
   const args = [...exe.argv, ...a.args({ cwd, model, readFiles })];
-  const spawnOpts = { cwd, windowsHide: true, shell: !!exe.needsShell, stdio: ["pipe", "pipe", "pipe"] };
+  const spawnOpts = { cwd, windowsHide: true, shell: !!exe.needsShell || shellFor(exe.file), stdio: ["pipe", "pipe", "pipe"] };
   // An adapter may add env vars; the inherited environment stays intact.
   if (a.env) spawnOpts.env = { ...process.env, ...a.env({ cwd, model, readFiles }) };
   const child = spawn(exe.file, args, spawnOpts);
