@@ -4,7 +4,7 @@ import { flatten, maskComments, sentenceRanges, skipGroup } from "../shared/tex.
 import { lf, sha1 } from "./scan.mjs";
 
 const FRONT = /^\\(?:(?:title|author|markboth|thanks|date|IEEE[A-Za-z]+)\b|begin\{IEEEkeywords\})/;
-const AUX_START = /^\\(?:(?:title|author|markboth|thanks|date|IEEE[A-Za-z]+)\b|begin\{IEEEkeywords\}|begin\{(?:figure\*?|table\*?|tikzpicture|algorithm\*?|algorithmic|tabular\*?|subfigure|wrapfigure|center|adjustbox|thebibliography)\}|input\{|FloatBarrier|clearpage|newpage|bibliography|IEEEtrigger|appendix|maketitle|editoriallegend|vspace|centering\b)/;
+const AUX_START = /^\\(?:(?:title|author|markboth|thanks|date|IEEE[A-Za-z]+)\b|begin\{IEEEkeywords\}|begin\{(?:figure\*?|table\*?|tikzpicture|algorithm\*?|algorithmic|tabular\*?|tabularx|longtable|subfigure|wrapfigure|center|adjustbox|thebibliography)\}|input\{|FloatBarrier|clearpage|newpage|bibliography|IEEEtrigger|appendix|maketitle|editoriallegend|vspace|centering\b)/;
 // A paragraph that is only a displayed equation should read as math, not as a
 // LaTeX block. Figures and tables keep their read-only treatment.
 const MATH_ONLY = /^\s*(?:\\\[|\$\$|\\begin\{(?:equation\*?|align\*?|gather\*?|multline\*?|eqnarray\*?|displaymath)\})/;
@@ -94,7 +94,7 @@ export function extractTikz(raw, context = "") {
   return { key: sha1(lf(tex)), tex };
 }
 
-const STRUCT_ENVS = new Set(["figure", "figure*", "table", "table*", "tikzpicture", "algorithm", "algorithm*", "algorithmic", "tabular", "tabular*", "thebibliography", "center", "adjustbox", "subfigure", "wrapfigure"]);
+const STRUCT_ENVS = new Set(["figure", "figure*", "table", "table*", "tikzpicture", "algorithm", "algorithm*", "algorithmic", "tabular", "tabular*", "tabularx", "longtable", "thebibliography", "center", "adjustbox", "subfigure", "wrapfigure"]);
 
 /** Ranges of structural environments that must not be cut at blank lines. */
 function structuralRanges(masked, from, to) {
@@ -143,6 +143,15 @@ export function buildArticle(scan) {
       if (structs.some(([s0, e0]) => eq.start >= s0 && eq.end <= e0)) continue;
       cuts.add(eq.start); cuts.add(eq.end);
     }
+    // A table or figure that follows a lead-in sentence without a blank line
+    // gets its own block too, so its source is a disclosure rather than prose.
+    // Only the outermost environment is cut; nested tabular/algorithmic stay in it.
+    const outerStructs = structs.filter(([a0, b0]) => !structs.some(([a1, b1]) => a1 < a0 && b0 < b1));
+    for (const [a0, b0] of outerStructs) {
+      const insideUnit = (p) => us.some((u) => u.start < p && p < u.end);
+      if (insideUnit(a0) || insideUnit(b0)) continue;
+      cuts.add(a0); cuts.add(b0);
+    }
     const pts = [...cuts].sort((a, b) => a - b);
     for (let k = 0; k + 1 < pts.length; k++) {
       let s = pts[k], e = pts[k + 1];
@@ -169,7 +178,11 @@ export function buildArticle(scan) {
       const masked = maskComments(raw); const lead = masked.replace(/^\s+/, "");
       if (!inside.length && /^(%|\\(?:label|end)\{)/.test(raw) && !/[A-Za-z]{4,}\s+[A-Za-z]{3,}/.test(masked)) continue;
       const mathOnly = MATH_ONLY.test(masked);
-      const aux = !mathOnly && (AUX_START.test(lead) || (!inside.length && proseWords(raw) < 5));
+      // A short lead-in sentence ("Table I summarizes these combinations.") is
+      // prose, not a read-only fragment; only fragments without sentence shape
+      // fall back to the LaTeX disclosure.
+      const proseLike = !inside.length && /[A-Za-z]{3,}\s+[A-Za-z]{3,}/.test(masked) && /[.!?]"?\s*$/.test(raw.trim());
+      const aux = !mathOnly && (AUX_START.test(lead) || (!inside.length && proseWords(raw) < 5 && !proseLike));
       const items = []; let pos = s;
       for (const u of inside) {
         if (u.start > pos) items.push({ t: "text", pieces: pieces(f, pos, u.start) });
@@ -178,7 +191,7 @@ export function buildArticle(scan) {
       if (pos < e) items.push({ t: "text", pieces: pieces(f, pos, e) });
       if (aux) {
         const tk = extractTikz(raw, f.text.slice(0, s));
-        blocks.push({ t: "aux", file: seg.file, line: f.text.slice(0, s).split("\n").length, caption: caption(raw), kind: FRONT.test(raw) ? "Front matter" : /\\begin\{(table|tabular)/.test(raw) ? "Table" : /\\begin\{(figure|tikz|subfigure|wrapfigure)/.test(raw) ? "Figure" : /\\begin\{algorithm/.test(raw) ? "Algorithm" : "LaTeX",
+        blocks.push({ t: "aux", file: seg.file, line: f.text.slice(0, s).split("\n").length, caption: caption(raw), kind: FRONT.test(raw) ? "Front matter" : /\\begin\{(?:table|tabular|tabularx|longtable)/.test(raw) ? "Table" : /\\begin\{(figure|tikz|subfigure|wrapfigure)/.test(raw) ? "Figure" : /\\begin\{algorithm/.test(raw) ? "Algorithm" : "LaTeX",
           src: lf(raw).slice(0, 1200), units: items.filter((x) => x.t === "unit").map((x) => x.id),
           tikz: tk ? { key: tk.key } : null, tikzSrc: tk?.tex });
       } else if (mathOnly) {

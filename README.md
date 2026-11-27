@@ -69,6 +69,10 @@ locally.
 - **TikZ figures**: rendered as figures in place with the paper's preamble when
   a LaTeX installation is available. The source stays behind a **LaTeX source**
   disclosure, and the figure is cached by content.
+- **Tables and other blocks**: a table, algorithm or similar structural
+  environment becomes its own read-only block even when it follows a lead-in
+  sentence on the same paragraph. Its caption is shown and the LaTeX stays behind
+  a disclosure; `tabularx` and `longtable` are recognised as tables.
 - **PDF previews**: tracked or clean, from the current files or with your
   decisions applied. Built in the tool's staging folder with `latexmk`.
 - **Apply reviewed changes**: preview the patch, choose clean or tracked output,

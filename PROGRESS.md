@@ -1,5 +1,13 @@
 # Progress
 
+## 2026-11-27 — Tables after a lead-in sentence
+
+- Reported with `Table I summarizes these combinations. \begin{table}...` (`Papers/JVer_DOGM/root.tex:421`): the table was in the same paragraph as its lead-in sentence, so `buildArticle` saw a prose block and rendered the whole `tabularx` source as body text.
+- `buildArticle` now cuts at the boundaries of the outermost structural environment (figure, table, algorithm, center, …), keeping nested `tabular`/`algorithmic` inside the outer block. The same pass keeps display equations as their own blocks (0.1.17).
+- `tabularx` and `longtable` are now structural environments and are detected as tables; the caption and source appear in the existing read-only disclosure.
+- A short lead-in sentence now stays prose instead of falling into the <5-word LaTeX-fragment heuristic.
+- New regression test in `app/tests/tex.test.mjs`; the real paper now has 5 table blocks (including the previously leaking one) and 0 prose blocks with structural source. 53 tests and `npm run check` pass. Version 0.1.18; packaged and installed locally.
+
 ## 2026-11-27 — Review display equations as one block
 
 - Reported: equation review in the body is not covered by `\added` / `\deleted` / `\replaced` — those commands cannot wrap an `equation`/`align` environment, so changed equations were only read-only math. The paper's current revision adds and changes many equations outside the tracked prose.

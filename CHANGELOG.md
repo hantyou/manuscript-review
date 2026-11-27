@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.18
+
+- Keep a table, figure, algorithm or other structural environment out of the prose when it follows a lead-in sentence on the same paragraph: it becomes its own read-only block with its caption and source, instead of showing the whole environment as raw text.
+- Recognise `tabularx` and `longtable` as table environments.
+- Keep a short lead-in sentence as prose instead of treating it as a LaTeX fragment.
+
 ## 0.1.17
 
 - Put a display equation into review with one click: hover it in the article and choose **Review this equation**. When the Git baseline has the same `\label`, its version fills the **Baseline equation** side, so the whole environment is compared as one block.

@@ -287,6 +287,38 @@ The section text stays.
   }
 });
 
+test("a table after a lead-in sentence becomes a read-only table block", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mr-table-"));
+  try {
+    await fs.writeFile(path.join(dir, "root.tex"), String.raw`\documentclass{article}
+\begin{document}
+Table~\ref{tab:x} summarizes these combinations.
+\begin{table}[!t]
+\caption{Method names.}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+A & B \\
+\bottomrule
+\end{tabularx}
+\end{table}
+After the table.
+\end{document}
+`);
+    const scan = await scanProject(dir, "root.tex");
+    const blocks = buildArticle(scan);
+    const table = blocks.find((b) => b.t === "aux" && b.kind === "Table" && b.file === "root.tex");
+    assert.ok(table, "the table is a read-only table block");
+    assert.equal(table.caption, "Method names.");
+    assert.match(table.src, /tabularx/);
+    const leaks = blocks.filter((b) => b.t === "para" && (b.items || []).some((i) => i.t === "text" && (i.pieces || []).some((p) => /\\begin\{table\}/.test(p.text))));
+    assert.equal(leaks.length, 0, "the table source does not flow as prose");
+    const lead = blocks.find((b) => b.t === "para" && (b.items || []).some((i) => i.t === "text" && (i.pieces || []).some((p) => /summarizes these combinations/.test(p.text))));
+    assert.ok(lead, "the lead-in sentence stays in prose");
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("sentence ranges keep a displayed equation with a period together", () => {
   const src = String.raw`Predictions,\begin{equation}x=a.\end{equation} Next sentence.`;
   const r = sentenceRanges(src);
