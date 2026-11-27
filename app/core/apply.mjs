@@ -7,6 +7,9 @@ import { encodeSource, readSource, sha1, sha256 } from "./scan.mjs";
 
 export function replacementFor(u, mode, baseMatch, changesAuthor = "") {
   const T = flatten((chosenText(u) ?? "").replace(/\r\n/g, "\n"), "new").trim();
+  // Display equations are replaced as a whole: \replaced{...}{...} cannot wrap
+  // an equation/align environment, so both output modes write clean text.
+  if (u.kind === "equation") return T;
   if (mode !== "tracked") return T;
   const B = (baseMatch?.status === "exact" ? baseMatch.text : u.imported.original).trim();
   if (norm(T) === norm(B)) return T;

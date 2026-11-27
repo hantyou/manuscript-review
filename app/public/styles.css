@@ -116,6 +116,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .run .katex-display { text-align: center; }
 .math-block .run { margin-bottom: 14px; }
 .math-block .katex-display { margin: .35em 0; }
+/* A display equation can be added to the review from the article. */
+.math-block { position: relative; }
+.eq-review { position: absolute; top: 2px; right: 0; opacity: 0; transition: opacity .15s; background: var(--surface); }
+.math-block:hover .eq-review, .eq-review:focus-visible { opacity: 1; }
+@media (hover: none) { .eq-review { opacity: 1; } }
 .math-src { white-space: pre-wrap; font: 12.5px/1.45 ui-monospace, Consolas, monospace; color: var(--on-surface-var); background: var(--surface-2); border-radius: 6px; padding: 1px 5px; }
 /* TikZ figures: reserve space, then fade the rendered SVG in. */
 .tikz-block { margin: 12px 0 20px; padding: 12px 14px 10px; border: 1px solid var(--outline-soft); border-radius: var(--r-md); background: var(--surface-1); }

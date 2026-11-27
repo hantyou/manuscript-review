@@ -2,7 +2,7 @@
 import { listTexAtCommit, showFile } from "./git.mjs";
 import { maskComments, sentenceRanges, norm } from "../shared/tex.mjs";
 import { similarity } from "../shared/worddiff.mjs";
-import { lf } from "./scan.mjs";
+import { lf, findEquations } from "./scan.mjs";
 
 function looseMap(text) {
   const masked = maskComments(text); let s = ""; const map = [];
@@ -15,7 +15,7 @@ function looseMap(text) {
 }
 
 export class Baseline {
-  constructor(repoDir, commit) { this.repoDir = repoDir; this.commit = commit; this.files = new Map(); this.sent = null; }
+  constructor(repoDir, commit) { this.repoDir = repoDir; this.commit = commit; this.files = new Map(); this.sent = null; this.eq = null; }
 
   async load() {
     if (!this.commit) return this;
@@ -47,6 +47,20 @@ export class Baseline {
   }
 
   _lineOf(file, idx) { return this.files.get(file).text.slice(0, idx).split("\n").length; }
+
+  /** The baseline equation with this \label, for reviewing an equation as a whole. */
+  equation(label) {
+    if (!this.commit || !label) return null;
+    if (!this.eq) {
+      this.eq = new Map();
+      for (const [file, f] of this.files) {
+        for (const q of findEquations(f.text)) {
+          if (q.label && !this.eq.has(q.label)) this.eq.set(q.label, { ...q, file, line: this._lineOf(file, q.start) });
+        }
+      }
+    }
+    return this.eq.get(label) || null;
+  }
 
   /** @returns {{status:string,text?:string,file?:string,line?:number,count?:number,similarity?:number,note:string}} */
   match(orig, ctxBefore = "") {

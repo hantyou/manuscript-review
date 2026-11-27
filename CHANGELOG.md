@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.17
+
+- Put a display equation into review with one click: hover it in the article and choose **Review this equation**. When the Git baseline has the same `\label`, its version fills the **Baseline equation** side, so the whole environment is compared as one block.
+- Render both equations with KaTeX in the card and replace the whole environment on apply. Tracked mode writes equations as clean text, because `\added`, `\deleted` and `\replaced` cannot wrap a display environment.
+- A reviewed equation is matched by `\label`, so editing its body keeps the same card; applying it and then editing it again reopens the card instead of staying **Applied**.
+
 ## 0.1.16
 
 - Pick up a saved `.tex`, `.bib` or `.aux` file immediately in VS Code instead of waiting for the next poll; the 1.5 s hash poll stays as the fallback for other editors, network drives and lost events.

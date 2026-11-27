@@ -346,6 +346,16 @@ function blockEl(i) {
       else { const n = unitNode(it.id); if (n.tagName === "ARTICLE") { flush(); el.appendChild(n); } else html += n.outerHTML; }
     }
     flush();
+    if (b.math && b.start != null) {
+      el.dataset.eqFile = b.file; el.dataset.eqStart = b.start; el.dataset.eqEnd = b.end; el.dataset.eqSha = b.fileSha;
+      if (!b.items.some((it) => it.t === "unit")) {
+        const btn = document.createElement("button");
+        btn.className = "btn text sm eq-review"; btn.dataset.act = "revieweq";
+        btn.innerHTML = icon("edit") + "Review this equation";
+        btn.title = "Add this display equation to the review";
+        el.appendChild(btn);
+      }
+    }
   }
   el.dataset.i = i; blockEls[i] = el; return el;
 }
@@ -382,21 +392,23 @@ function cardEl(id) {
 const provPill = (c) => ({ exact: ["ok", "Verbatim in Git"], loose: ["ok", "In Git (spacing differs)"], differs: ["warn", "Differs from Git"], ambiguous: ["warn", "Several Git matches"], missing: ["warn", "Not in Git"], new: ["pri", "New text"], none: ["", "No Git baseline"] }[c.provenance] || ["", c.provenance]);
 function fillCard(el) {
   const id = el.dataset.id, c = C[id]; if (!c) return;
-  el.className = `ucard st-${c.status}${activeId === id ? " active" : ""}${openEd.has(id) ? " editing" : ""}`;
+  el.className = `ucard st-${c.status}${activeId === id ? " active" : ""}${openEd.has(id) ? " editing" : ""}${c.kind === "equation" ? " eq-card" : ""}`;
   const [pc, pl] = provPill(c);
   const sp = { pending: ["", "Pending"], decided: ["ok", "Using " + (c.choice || "")], stale: ["bad", "Re-review"], applied: ["pri", "Applied"], detached: ["", "Detached"] }[c.status];
   $(".c-head", el).innerHTML = `<span class="pill ${sp[0]}">${c.status === "decided" ? icon("check") : c.status === "stale" ? icon("warn") : ""}${esc(sp[1])}</span>
-    <span class="pill">${{ replace: "Replacement", add: "Addition", delete: "Deletion", manual: "Unmarked text" }[c.kind]}</span>
+    <span class="pill">${{ replace: "Replacement", add: "Addition", delete: "Deletion", manual: "Unmarked text", equation: "Equation" }[c.kind]}</span>
     <span class="pill ${pc}" title="${esc(c.baseline?.note || "")}">${esc(pl)}</span>
     ${c.original.edited ? '<span class="pill warn">original edited</span>' : ""}${c.proposed.edited ? '<span class="pill warn">proposed edited</span>' : ""}${c.comments.length ? `<span class="pill">${icon("comment")}${c.comments.length}</span>` : ""}
     <span class="loc">${esc(c.file)}:${c.line ?? "?"}</span>${c.sourceChangedInfo ? '<button class="btn tonal sm" data-act="takesource">Source changed. Use it</button>' : ""}
     <button class="icon-btn sm" data-act="collapse" title="Collapse this change" aria-label="Collapse this change">${icon("collapse")}</button>`;
-  const ops = wordDiff(c.original.text, c.proposed.text);
+  const eq = c.kind === "equation";
+  const ops = eq ? null : wordDiff(c.original.text, c.proposed.text);
   const col = (k) => {
     const x = c[k], isO = k === "original", empty = !x.text.trim();
-    const body = empty ? `<div class="read empty">${isO ? "No previous text. This is an addition." : "Text removed in this revision."}</div>` : view.src ? `<div class="mono">${esc(x.text)}</div>` : `<div class="read">${diffHtml(ops, isO ? "del" : "ins", env, view.hide)}</div>`;
+    const body = empty ? `<div class="read empty">${isO ? "No previous text. This is an addition." : "Text removed in this revision."}</div>` : view.src ? `<div class="mono">${esc(x.text)}</div>` : eq ? `<div class="read eq">${R(x.text)}</div>` : `<div class="read">${diffHtml(ops, isO ? "del" : "ins", env, view.hide)}</div>`;
     const chosen = c.decision?.choice === k && ["decided", "stale"].includes(c.status);
-    return `<div class="col ${isO ? "orig" : "prop"}${chosen ? " chosen" : ""}"><div class="lbl">${isO ? "Original wording" : "Proposed wording"}${x.edited ? '<span class="pill warn">edited</span>' : ""}${chosen ? `<span class="pill pri">${icon("check")}chosen</span>` : ""}</div>${body}</div>`;
+    const name = isO ? (eq ? "Baseline equation" : "Original wording") : (eq ? "Current equation" : "Proposed wording");
+    return `<div class="col ${isO ? "orig" : "prop"}${chosen ? " chosen" : ""}"><div class="lbl">${name}${x.edited ? '<span class="pill warn">edited</span>' : ""}${chosen ? `<span class="pill pri">${icon("check")}chosen</span>` : ""}</div>${body}</div>`;
   };
   $(".c-cmp", el).innerHTML = col("original") + col("proposed");
   const cu = $(".c-custom", el); const showCustom = c.decision?.choice === "custom" || c.custom.touched;
@@ -536,6 +548,13 @@ document.addEventListener("click", async (e) => {
     edit: () => { openEd.has(id) ? openEd.delete(id) : openEd.add(id); const el = findUnitEl(id); fillCard(el); if (openEd.has(id)) $("textarea[data-edit=proposed]", el)?.focus(); },
     ai: () => { view.ai = true; store.set("ai", true); applyPanels(); refreshUnit(id); $("#aiText")?.focus(); },
     rescan: async () => { await api("POST", "/rescan"); await loadProject(); await loadArticle(); },
+    revieweq: async () => {
+      const block = b.closest(".math-block");
+      try {
+        const r = await api("POST", "/units/manual", { file: block.dataset.eqFile, fileSha: block.dataset.eqSha, start: +block.dataset.eqStart, end: +block.dataset.eqEnd });
+        await loadProject(); await loadArticle(); goto(r.id, "auto");
+      } catch (err) { toast(err.message); }
+    },
     dismiss: () => banner(""),
     close: () => closeModal(),
   };
@@ -581,6 +600,7 @@ async function openApply(mode = "clean") {
       <div class="rowf" style="gap:16px;flex-wrap:wrap"><label><input type="radio" name="mode" value="clean" ${mode === "clean" ? "checked" : ""}> Clean text (markup removed for decided units)</label>
       <label><input type="radio" name="mode" value="tracked" ${mode === "tracked" ? "checked" : ""}> Tracked (regenerate \\replaced against the Git baseline)</label></div>
       <p class="small muted">Only decided units are written. ${p.skipped.pending} pending and ${p.skipped.stale} to re-review keep their source and markup. Files touched: ${p.files.map((f) => esc(f.rel)).join(", ") || "none"}. A checkpoint is saved first.</p>
+      ${p.patches.some((x) => x.kind === "equation") ? `<p class="small muted">Display equations are written as clean text in both modes: LaTeX tracked-change markup cannot wrap an equation environment.</p>` : ""}
       ${p.conflicts.length ? `<div class="banner">${p.conflicts.map((c) => esc(c.unitId + ": " + c.reason)).join("<br>")}</div>` : ""}${patches}
       <p class="rowf" style="margin-top:16px"><button class="btn filled" data-apply="${p.token}" ${p.patches.length ? "" : "disabled"}>Apply ${p.patches.length} change${p.patches.length === 1 ? "" : "s"}</button><button class="btn text" data-act="close">Cancel</button><span class="spacer"></span><button class="btn tonal" id="btnCheckpoints">Checkpoints and undo</button></p>`);
     $$('input[name="mode"]').forEach((r) => (r.onchange = () => openApply(r.value)));

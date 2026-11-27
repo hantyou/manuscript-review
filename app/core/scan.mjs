@@ -51,6 +51,59 @@ export function paragraphBounds(text, start, end) {
 
 const tidy = (s) => lf(s).replace(/^[ \t]+|[ \t]+$/g, "").replace(/^\n+|\n+$/g, "");
 
+/** Environments that hold one display equation and can be reviewed as a unit. */
+const EQ_ENVS = "equation\\*?|align\\*?|gather\\*?|multline\\*?|eqnarray\\*?|displaymath";
+const EQ_OPEN = new RegExp(`\\\\begin\\s*\\{(${EQ_ENVS})\\}|\\\\\\[|\\$\\$`, "g");
+
+/**
+ * Display equations with file offsets and the first \label in each. Comments
+ * are masked first, so a commented-out equation is never picked up. Ranges
+ * include the environment delimiters; the whole block is what gets reviewed.
+ */
+export function findEquations(text) {
+  const masked = maskComments(text); const out = [];
+  EQ_OPEN.lastIndex = 0;
+  let m;
+  while ((m = EQ_OPEN.exec(masked))) {
+    const start = m.index;
+    // "\\[" is a line break with spacing, not a display opener.
+    if (m[0] === "\\[" && start > 0 && masked[start - 1] === "\\") continue;
+    let end = -1;
+    if (m[0] === "\\[") {
+      const close = masked.indexOf("\\]", start + 2); if (close < 0) break; end = close + 2;
+    } else if (m[0] === "$$") {
+      const close = masked.indexOf("$$", start + 2); if (close < 0) break; end = close + 2;
+    } else {
+      const tag = "\\end{" + m[1] + "}";
+      const close = masked.indexOf(tag, start + m[0].length); if (close < 0) break; end = close + tag.length;
+    }
+    const body = masked.slice(start, end);
+    const label = (body.match(/\\label\s*\{([^}]*)\}/) || [])[1]?.trim() || null;
+    out.push({ start, end, env: m[1] || (m[0] === "$$" ? "$$" : "\\["), label, text: lf(text.slice(start, end)) });
+    EQ_OPEN.lastIndex = end;
+  }
+  return out;
+}
+
+/** Locate a reviewed equation by its label, even after its body was edited. */
+export function locateEquation(scan, m) {
+  if (!m.label) return null;
+  const hit = (scan.equations || []).find((e) => e.label === m.label);
+  return hit ? { file: hit.file, start: hit.start, end: hit.end } : null;
+}
+
+/** Fallback for unlabelled equations: the text just before and after it. */
+export function locateEquationByContext(scan, m) {
+  const f = scan.files.get(m.file); if (!f) return null;
+  const before = (m.before || "").slice(-40), after = (m.after || "").slice(0, 40);
+  if (!before && !after) return null;
+  const hit = (scan.equations || []).find((e) => e.file === m.file
+    && f.text.slice(Math.max(0, e.start - before.length), e.start) === before
+    && f.text.slice(e.end, e.end + after.length) === after);
+  return hit ? { file: hit.file, start: hit.start, end: hit.end } : null;
+}
+
+
 function groupNodes(nodes, text) {
   const groups = []; let cur = null;
   for (const n of nodes) {
@@ -124,7 +177,9 @@ export async function scanProject(projDir, mainRel) {
   units.sort((a, b) => a.seq - b.seq);
   const macros = {};
   for (const f of files.values()) Object.assign(macros, extractMacros(f.text));
-  return { projDir, mainRel, files, order, headings, units, macros };
+  const equations = [];
+  for (const [rel, f] of files) for (const e of findEquations(f.text)) equations.push({ ...e, file: rel });
+  return { projDir, mainRel, files, order, headings, units, macros, equations };
 }
 
 /** Locate a manual (unmarked) passage in the current sources. */

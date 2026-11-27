@@ -74,12 +74,12 @@ export function syncUnits(review, scan, manualScan = []) {
   const incoming = [...scan.units, ...manualScan];
   const byId = new Map(Object.values(review.units).map((u) => [u.id, u]));
   const claimed = new Set();
-  const unclaimed = () => Object.values(review.units).filter((u) => !claimed.has(u.id) && !u.applied && u.kind !== "manual");
+  const unclaimed = () => Object.values(review.units).filter((u) => !claimed.has(u.id) && !u.applied && u.kind !== "manual" && u.kind !== "equation");
   const out = [];
   incoming.forEach((su, idx) => {
     let eu = byId.get(su.id);
     if (eu && claimed.has(eu.id)) eu = null;
-    if (!eu && su.kind !== "manual") {
+    if (!eu && su.kind !== "manual" && su.kind !== "equation") {
       const cand = unclaimed();
       const a = cand.filter((u) => norm(u.imported.original) === norm(su.orig));
       const b = cand.filter((u) => norm(u.imported.proposed) === norm(su.prop));
@@ -87,11 +87,18 @@ export function syncUnits(review, scan, manualScan = []) {
     }
     if (!eu) { eu = createUnit(su, idx); review.units[eu.id] = eu; }
     claimed.add(eu.id);
+    eu.present = true; eu.file = su.file; eu.order = idx; eu.srcSha = su.srcSha; eu.kind = su.kind;
+    // An equation stays in the source after it is applied. Keep "applied" only
+    // while the file still holds the applied wording; a later edit reopens it.
+    const eqApplied = eu.kind === "equation" && !!eu.applied && norm(su.prop) === norm(eu.applied.text);
+    if (eu.kind === "equation" && eu.applied && !eqApplied) eu.applied = null;
     // A clean apply removes the markup from the source. A fresh scan that still
     // finds it has matched another, unapplied occurrence that reused the id.
-    if (eu.applied?.mode === "clean" && eu.kind !== "manual") eu.applied = null;
-    eu.present = true; eu.file = su.file; eu.order = idx; eu.srcSha = su.srcSha; eu.kind = su.kind;
-    if (su.orig !== eu.imported.original || su.prop !== eu.imported.proposed) eu.sourceChanged = { original: su.orig, proposed: su.prop, srcText: su.srcText };
+    if (eu.applied?.mode === "clean" && eu.kind !== "manual" && eu.kind !== "equation") eu.applied = null;
+    if (eqApplied) {
+      eu.imported.proposed = su.prop; eu.imported.srcText = su.srcText;
+      delete eu.sourceChanged;
+    } else if (su.orig !== eu.imported.original || su.prop !== eu.imported.proposed) eu.sourceChanged = { original: su.orig, proposed: su.prop, srcText: su.srcText };
     else delete eu.sourceChanged;
     su.stateId = eu.id;
   });

@@ -61,6 +61,11 @@ locally.
   while you switch between cards; **Ctrl+Enter** / **Cmd+Enter** sends.
 - **Equations**: display math renders with KaTeX, including equation, align and
   split environments and the paper's own macros; inline math stays in the text flow.
+  Hover a display equation and choose **Review this equation** to compare the whole
+  environment as one card. When the Git baseline has the same `\label`, its version
+  fills the left side; otherwise the equation starts as an addition. Equations are
+  written as clean text on apply, because LaTeX tracked-change commands cannot wrap
+  an equation environment.
 - **TikZ figures**: rendered as figures in place with the paper's preamble when
   a LaTeX installation is available. The source stays behind a **LaTeX source**
   disclosure, and the figure is cached by content.

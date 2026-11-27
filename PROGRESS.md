@@ -1,5 +1,13 @@
 # Progress
 
+## 2026-11-27 — Review display equations as one block
+
+- Reported: equation review in the body is not covered by `\added` / `\deleted` / `\replaced` — those commands cannot wrap an `equation`/`align` environment, so changed equations were only read-only math. The paper's current revision adds and changes many equations outside the tracked prose.
+- Hovering a display equation in the article now shows **Review this equation**; it creates one card for the whole environment. If the Git baseline has an equation with the same `\label`, the baseline text fills the **Baseline equation** side; a labelled equation absent from the baseline is treated as an addition.
+- The card renders both sides with KaTeX (no word-level markup inside math), and applying replaces the whole environment. `replacementFor` writes equations as clean text in both modes because `\replaced{...}{...}` is invalid around display math; the apply preview says so when an equation patch is present.
+- Reviewed equations are re-located by `\label`, so editing the body keeps the same card. `syncUnits` keeps **Applied** only while the file still contains the applied wording; a later edit clears it and reports the new source, while the baseline side stays available.
+- New `app/tests/equations.test.mjs`: equation scanning (comments, `\[`, `$$`, `\\[`), an unlabelled equation kept in review by its surrounding context, plus a Git-baseline session that adds, decides, applies in tracked mode, and reopens on a later edit. 52 tests and `npm run check` pass. Version 0.1.17; packaged and installed locally.
+
 ## 2026-11-27 — Instant source sync after a save
 
 - Reported: after saving `root.tex`, the panel could take noticeably longer than the documented ~2 s to report a source change. The server-side watcher was healthy (hash check ~2 ms, rescan ~36 ms on `Papers/JVer_DOGM`); the delay came from waiting for the next 1.5 s tick and from the client silently deferring the reload while a card edit or dialog is open.

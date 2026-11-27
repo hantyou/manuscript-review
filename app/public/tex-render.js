@@ -20,7 +20,7 @@ export function mathHtml(tex, display, env) {
   return `<code class="math-src">${display ? "\\[" : "$"}${esc(tex)}${display ? "\\]" : "$"}</code>`;
 }
 
-const MATH_ENVS = ["equation", "equation*", "align", "align*", "gather", "gather*", "multline", "multline*", "eqnarray", "eqnarray*"];
+const MATH_ENVS = ["equation", "equation*", "align", "align*", "gather", "gather*", "multline", "multline*", "eqnarray", "eqnarray*", "displaymath"];
 const CITE = /^cite[a-z]*$/;
 const REF = /^(ref|eqref|autoref|cref|Cref|pageref)$/;
 const SIMPLE = { emph: "em", textit: "em", textbf: "b", texttt: "code", textsc: "span", underline: "u", sout: "s", mbox: "span", hbox: "span", textrm: "span", textsf: "span", text: "span" };

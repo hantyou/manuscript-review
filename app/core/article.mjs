@@ -7,7 +7,7 @@ const FRONT = /^\\(?:(?:title|author|markboth|thanks|date|IEEE[A-Za-z]+)\b|begin
 const AUX_START = /^\\(?:(?:title|author|markboth|thanks|date|IEEE[A-Za-z]+)\b|begin\{IEEEkeywords\}|begin\{(?:figure\*?|table\*?|tikzpicture|algorithm\*?|algorithmic|tabular\*?|subfigure|wrapfigure|center|adjustbox|thebibliography)\}|input\{|FloatBarrier|clearpage|newpage|bibliography|IEEEtrigger|appendix|maketitle|editoriallegend|vspace|centering\b)/;
 // A paragraph that is only a displayed equation should read as math, not as a
 // LaTeX block. Figures and tables keep their read-only treatment.
-const MATH_ONLY = /^\s*(?:\\\[|\$\$|\\begin\{(?:equation\*?|align\*?|gather\*?|multline\*?|eqnarray\*?)\})/;
+const MATH_ONLY = /^\s*(?:\\\[|\$\$|\\begin\{(?:equation\*?|align\*?|gather\*?|multline\*?|eqnarray\*?|displaymath)\})/;
 const SETUP_ARGS = { definecolor: 3, colorlet: 2, tikzset: 1, pgfplotsset: 1 };
 
 /** Source ranges in reading order, with \input and \include expanded in place. */
@@ -134,6 +134,15 @@ export function buildArticle(scan) {
       cuts.add(a); cuts.add(b);
     }
     for (const h of scan.headings) if (h.file === seg.file && h.start >= seg.start && h.end <= seg.end) { cuts.add(h.start); cuts.add(h.end); }
+    // Give every display equation its own block, even when it follows a lead-in
+    // sentence without a blank line, so it can be reviewed as one unit. Equations
+    // inside a review unit or a figure/table stay with their surrounding block.
+    for (const eq of scan.equations || []) {
+      if (eq.file !== seg.file || eq.start < seg.start || eq.end > seg.end) continue;
+      if (us.some((u) => (u.start < eq.start && eq.start < u.end) || (u.start < eq.end && eq.end < u.end))) continue;
+      if (structs.some(([s0, e0]) => eq.start >= s0 && eq.end <= e0)) continue;
+      cuts.add(eq.start); cuts.add(eq.end);
+    }
     const pts = [...cuts].sort((a, b) => a - b);
     for (let k = 0; k + 1 < pts.length; k++) {
       let s = pts[k], e = pts[k + 1];
@@ -159,7 +168,7 @@ export function buildArticle(scan) {
       const inside = us.filter((u) => u.start >= s && u.end <= e);
       const masked = maskComments(raw); const lead = masked.replace(/^\s+/, "");
       if (!inside.length && /^(%|\\(?:label|end)\{)/.test(raw) && !/[A-Za-z]{4,}\s+[A-Za-z]{3,}/.test(masked)) continue;
-      const mathOnly = !inside.length && MATH_ONLY.test(masked);
+      const mathOnly = MATH_ONLY.test(masked);
       const aux = !mathOnly && (AUX_START.test(lead) || (!inside.length && proseWords(raw) < 5));
       const items = []; let pos = s;
       for (const u of inside) {
@@ -173,7 +182,20 @@ export function buildArticle(scan) {
           src: lf(raw).slice(0, 1200), units: items.filter((x) => x.t === "unit").map((x) => x.id),
           tikz: tk ? { key: tk.key } : null, tikzSrc: tk?.tex });
       } else if (mathOnly) {
-        blocks.push({ t: "para", file: seg.file, fileSha: f.sha, line: f.text.slice(0, s).split("\n").length, items: [{ t: "text", pieces: [{ text: lf(raw) }] }], math: true });
+        // With a reviewed equation inside, use the unit items. Otherwise keep the
+        // whole equation as one raw piece: sentence splitting would cut it apart.
+        const eqItems = inside.length
+          ? (() => {
+              const out = []; let pos = s;
+              for (const u of inside) {
+                if (u.start > pos) out.push({ t: "text", pieces: [{ text: lf(f.text.slice(pos, u.start)) }] });
+                out.push({ t: "unit", id: unitIdOf(u) }); pos = u.end;
+              }
+              if (pos < e) out.push({ t: "text", pieces: [{ text: lf(f.text.slice(pos, e)) }] });
+              return out;
+            })()
+          : [{ t: "text", pieces: [{ text: lf(raw) }] }];
+        blocks.push({ t: "para", file: seg.file, fileSha: f.sha, line: f.text.slice(0, s).split("\n").length, math: true, start: s, end: e, items: eqItems });
       } else blocks.push({ t: "para", file: seg.file, fileSha: f.sha, line: f.text.slice(0, s).split("\n").length, items });
     }
   }

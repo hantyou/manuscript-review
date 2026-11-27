@@ -3,7 +3,7 @@ import { promises as fs, existsSync } from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { flatten, sentenceRanges, skipGroup, maskComments, collectChangesAuthors } from "../shared/tex.mjs";
-import { scanProject, locateManual, lf, sha1, sha256 } from "./scan.mjs";
+import { scanProject, locateManual, locateEquation, locateEquationByContext, lf, sha1, sha256 } from "./scan.mjs";
 import { Baseline } from "./baseline.mjs";
 import { headCommit, commitInfo, isGitRepo } from "./git.mjs";
 import * as M from "./model.mjs";
@@ -77,20 +77,7 @@ export class Session extends EventEmitter {
   async rescan(first = false, info = {}) {
     const scan = await scanProject(this.proj.dir, this.proj.mainRel);
     const R = this.R;
-    // Manual (unmarked) passages are re-located by content and context.
-    const manualUnits = [];
-    for (const m of R.manual) {
-      const loc = locateManual(scan, m);
-      if (!loc) continue;
-      const f = scan.files.get(m.file);
-      const heads = scan.headings.filter((h) => h.file === m.file && h.start < loc.start);
-      manualUnits.push({
-        id: m.id, kind: "manual", file: m.file, start: loc.start, end: loc.end, srcText: m.srcText, orig: lf(m.srcText), prop: lf(m.srcText),
-        srcSha: sha1(m.srcText), heading: heads.length ? heads[heads.length - 1].idx : -1, line: f.text.slice(0, loc.start).split("\n").length,
-        para: this._para(f.text, loc.start, loc.end), seq: 0,
-      });
-    }
-    scan.units.push(...manualUnits);
+    scan.units.push(...this._manualUnits(scan));
     scan.units.sort((a, b) => (a.heading - b.heading) || (a.file === b.file ? a.start - b.start : a.seq - b.seq));
     M.syncUnits(R, scan, []);
     this.scan = scan;
@@ -103,6 +90,30 @@ export class Session extends EventEmitter {
     return scan;
   }
   _para(text, s, e) { return scanProjectParagraph(text, s, e); }
+  /**
+   * Manual passages and reviewed equations, re-attached to a fresh scan.
+   * Equations are found by \label, so a changed body stays the same unit.
+   */
+  _manualUnits(scan) {
+    const units = [];
+    for (const m of this.R.manual) {
+      let loc = m.kind === "equation" && m.label ? locateEquation(scan, m) : null;
+      if (!loc && m.kind === "equation") loc = locateEquationByContext(scan, m);
+      if (!loc) loc = locateManual(scan, m);
+      if (!loc) continue;
+      const file = loc.file || m.file;
+      const f = scan.files.get(file); if (!f) continue;
+      const srcText = f.text.slice(loc.start, loc.end);
+      const heads = scan.headings.filter((h) => h.file === file && h.start < loc.start);
+      units.push({
+        id: m.id, stateId: m.id, kind: m.kind || "manual", file, start: loc.start, end: loc.end,
+        srcText, orig: m.kind === "equation" ? lf(m.original ?? srcText) : lf(m.srcText), prop: lf(srcText),
+        srcSha: sha1(srcText), heading: heads.length ? heads[heads.length - 1].idx : -1,
+        line: f.text.slice(0, loc.start).split("\n").length, para: this._para(f.text, loc.start, loc.end), seq: 0,
+      });
+    }
+    return units;
+  }
 
   async _snapshotOnce(scan) {
     const R = this.R;
@@ -151,7 +162,7 @@ export class Session extends EventEmitter {
       originalEdited: M.cur(u.original).text !== u.imported.original, proposedEdited: M.cur(u.proposed).text !== u.imported.proposed,
       choice: u.decision?.choice || null, sourceChanged: !!u.sourceChanged,
       hay: (M.cur(u.original).text + " " + M.cur(u.proposed).text).toLowerCase().slice(0, 2500),
-      preview: (u.kind === "add" ? M.cur(u.proposed).text : M.cur(u.original).text).replace(/\s+/g, " ").slice(0, 110),
+      preview: ((u.kind === "add" || u.kind === "equation") ? M.cur(u.proposed).text : M.cur(u.original).text).replace(/\s+/g, " ").slice(0, 110),
     };
   }
   candView(u, key) {
@@ -326,8 +337,30 @@ export class Session extends EventEmitter {
   async createManual({ file, start, end, fileSha }) {
     const f = this.scan.files.get(file); if (!f) throw fail(404, "Unknown file");
     if (f.sha !== fileSha) throw fail(409, "The file changed. Rescan first.");
+    if (!f.text.slice(start, end).trim()) throw fail(400, "Empty selection.");
+    // A display equation is reviewed as one block, even when the click lands on
+    // its whitespace or the selection includes a trailing \label.
+    const eqs = (this.scan.equations || []).filter((q) => q.file === file);
+    const eq = eqs.find((q) => q.start === start && q.end === end)
+      || eqs.find((q) => start >= q.start && end <= q.end)
+      || eqs.find((q) => q.start >= start && q.end <= end);
+    if (eq) {
+      const srcText = f.text.slice(eq.start, eq.end);
+      const id = "eq_" + sha1(file + "|" + (eq.label || srcText)).slice(0, 10);
+      if (this.R.manual.some((m) => m.id === id)) { await this.rescan(); return id; }
+      if (this.scan.units.some((u) => u.file === file && u.start < eq.end && eq.start < u.end)) throw fail(400, "That equation is already part of a review unit.");
+      const hit = eq.label ? this.baseline.equation(eq.label) : null;
+      // A labelled equation missing from the baseline is genuinely new; an
+      // unlabelled one (or a paper without Git) starts with both sides equal.
+      const original = hit ? lf(hit.text) : eq.label && this.baseline.commit ? "" : lf(srcText);
+      this.R.manual.push({
+        id, file, srcText: lf(srcText), before: f.text.slice(Math.max(0, eq.start - 40), eq.start), after: f.text.slice(eq.end, eq.end + 40),
+        kind: "equation", label: eq.label || null, original,
+      });
+      await this.rescan();
+      return id;
+    }
     const srcText = f.text.slice(start, end);
-    if (!srcText.trim()) throw fail(400, "Empty selection.");
     if (this.scan.units.some((u) => u.file === file && u.start < end && start < u.end)) throw fail(400, "That passage is already part of a review unit.");
     const id = "m_" + sha1(file + "|" + srcText + "|" + f.text.slice(Math.max(0, start - 30), start)).slice(0, 10);
     if (!this.R.manual.some((m) => m.id === id)) this.R.manual.push({ id, file, srcText, before: f.text.slice(Math.max(0, start - 40), start), after: f.text.slice(end, end + 40) });
@@ -337,9 +370,8 @@ export class Session extends EventEmitter {
   // ---------- decisions to source ----------
   async plan(mode = "clean") {
     const fresh = await scanProject(this.proj.dir, this.proj.mainRel);
-    // Re-attach manual passages and state ids to the fresh scan.
-    const manual = [];
-    for (const m of this.R.manual) { const loc = locateManual(fresh, m); if (loc) { const f = fresh.files.get(m.file); manual.push({ id: m.id, stateId: m.id, kind: "manual", file: m.file, start: loc.start, end: loc.end, srcSha: sha1(m.srcText), srcText: m.srcText, line: f.text.slice(0, loc.start).split("\n").length }); } }
+    // Re-attach manual passages and reviewed equations to the fresh scan.
+    const manual = this._manualUnits(fresh);
     const probe = JSON.parse(JSON.stringify({ units: this.R.units }));
     M.syncUnits(probe, { units: fresh.units }, []);
     fresh.units.push(...manual);
