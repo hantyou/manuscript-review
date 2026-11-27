@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.15
+
+- Detect `\added`, `\deleted` and `\replaced` inside sectioning commands such as `\subsection{\replaced{New title}{Old title}}`; they become review cards instead of silently showing only the new title.
+- Keep the change in its heading block: Compare shows the comparison card directly below the heading, and **Read result** follows the chosen wording.
+
+## 0.1.14
+
+- Collapse top-bar labels to icons when the panel is narrow: **Compare** (side-by-side comparison), **Read result** (open book) and **Apply reviewed changes** (double check). Full labels return as soon as there is room, and tooltips plus accessible names keep the actions identifiable.
+
+## 0.1.13
+
+- Keep the top bar readable in narrow windows: controls wrap onto extra rows instead of squeezing, so **Compare**, **Read result** and **Apply reviewed changes** keep their full labels at any panel width. Secondary controls (progress, reading-mode chips, save time) drop out progressively as space runs out.
+- Keep overlay panels (outline drawer, AI panel) aligned below the top bar when it wraps to several rows.
+- Stop the outline drawer's **Previous** / **Next pending** buttons from clipping their labels.
+- Let the article column use more of a wide editor window (cap raised from 980 px to 1200 px).
+
 ## 0.1.12
 
 - Hide LaTeX comments in the reading view, cards and AI passages instead of showing them as text.

@@ -1,5 +1,27 @@
 # Progress
 
+## 2026-11-27 — Tracked changes in section headings
+
+- Reported on `Papers/JVer_DOGM/root.tex:159`: `\subsection{\replaced{System and linear measurement model}{Sparsity-aware DOGM problem}}` showed only the new title and produced no review card. The walker skipped the whole heading argument, so the nested markup was never a unit.
+- `walk()` now reports markup nested inside a sectioning command (and keeps `titleRange`), so the heading title diff is scanned, matched against the Git baseline and can be decided/applied like any other unit. Applying rewrites only the `\replaced{...}{...}` part and leaves `\subsection{...}\label{...}` intact.
+- `buildArticle` places those units in the heading block instead of dropping them; Compare renders a card directly under the heading, **Read result** uses the decision text, and the outline counts the heading's own change.
+- Added two tests (nested heading flattening, heading unit kept in its heading block); 48 tests and `npm run check` pass. Version 0.1.15; packaged and installed locally.
+- This commit also includes the previously uncommitted 0.1.13/0.1.14 responsive top-bar work.
+
+## 2026-11-26 — Responsive top bar
+
+- Fixed the review toolbar cropping control labels in narrow windows (`Read resu…`, `Apply reviewed changes` cut off). The app bar now wraps to extra rows and every control keeps its intrinsic width; the paper title truncates first and secondary controls (progress, reading-mode chips, saved time) hide at narrower widths. Apply and the AI toggle move together so no lone icon is left on a line.
+- Overlay panels follow the measured bar height via a `ResizeObserver` that updates `--appbar`, so the outline drawer and AI panel stay below the toolbar when it wraps.
+- Fixed the drawer's **Previous** / **Next pending** row clipping; it no longer shrinks below its labels.
+- Compact mode requested by the author: at widths up to 1000 px **Compare** and **Read result** become icons (side-by-side comparison and open book); at 860 px and below **Apply reviewed changes** becomes a filled double-check button. Labels reappear when space allows; `title` tooltips and `aria-label`s preserve the accessible names.
+- Verified in Chrome at 360, 480, 700, 800, 900, 1000, 1100, 1280, 1400 and 1500 px: labels stay intact or collapse to icons, one row whenever it fits, otherwise a right-aligned action row. 46 tests and `npm run check` pass.
+- Version 0.1.14; packaged and installed locally with `code --install-extension`. Reload the VS Code window to pick it up.
+
+## 2026-11-25 — Wider article column
+
+- Raised the reading/comparison column cap in `app/public/styles.css` from `max-width: 980px` to `1200px` so the review screen uses more of a wide editor window; the 1000px breakpoint still drops the drawer and collapses cards to one column.
+- Also patched the locally installed 0.1.12 copy under `~/.vscode/extensions` for immediate use (reload the VS Code window). Not version-bumped or repackaged; the source change is what the next package will ship.
+
 ## 2026-11-11 — VS Code: spawn EINVAL when opening the panel
 
 - Fixed the review panel failing with `Could not start: spawn EINVAL` on Windows in the VS Code extension host. npm-installed agent CLIs resolve to `.cmd` shims, and Node throws `EINVAL` synchronously when such a shim is spawned without a shell (CVE-2024-27980). The `exec` helper now passes `shell: true` for `.cmd`/`.bat` and converts a synchronous throw into a failed probe, so agent detection can no longer abort `GET /agents`; `startRun` uses the same rule.

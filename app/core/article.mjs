@@ -142,7 +142,20 @@ export function buildArticle(scan) {
       if (e <= s) continue;
       const raw = f.text.slice(s, e);
       const h = heads.get(seg.file + ":" + s);
-      if (h && e === h.end) { blocks.push({ t: "heading", idx: h.idx, level: h.level, title: h.title }); continue; }
+      if (h && e === h.end) {
+        const inside = us.filter((u) => u.start >= s && u.end <= e);
+        if (inside.length) {
+          const items = []; let pos = h.titleStart;
+          const text = (a, b) => lf(flatten(f.text.slice(a, b), "new")).replace(/\s+/g, " ");
+          for (const u of inside) {
+            if (u.start > pos) items.push({ t: "text", text: text(pos, u.start) });
+            items.push({ t: "unit", id: unitIdOf(u) }); pos = u.end;
+          }
+          if (h.titleEnd > pos) items.push({ t: "text", text: text(pos, h.titleEnd) });
+          blocks.push({ t: "heading", idx: h.idx, level: h.level, title: h.title, items, units: inside.map(unitIdOf) });
+        } else blocks.push({ t: "heading", idx: h.idx, level: h.level, title: h.title });
+        continue;
+      }
       const inside = us.filter((u) => u.start >= s && u.end <= e);
       const masked = maskComments(raw); const lead = masked.replace(/^\s+/, "");
       if (!inside.length && /^(%|\\(?:label|end)\{)/.test(raw) && !/[A-Za-z]{4,}\s+[A-Za-z]{3,}/.test(masked)) continue;

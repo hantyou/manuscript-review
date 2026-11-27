@@ -46,6 +46,9 @@ locally.
   stands with the wording chosen so far. A deletion has no proposed wording,
   so collapsed and result views keep the removed text visible, struck through,
   instead of hiding what was deleted.
+- **Headings**: tracked changes inside `\section`…`\paragraph` arguments, such
+  as `\subsection{\replaced{New title}{Old title}}`, are review cards of their
+  own and appear under the heading; **Read result** follows the decision.
 - **Comparison card**: original wording on the left, proposed wording on the
   right, with word-level highlights. Decide, edit or ask the AI about it.
   **Use original** / **Use proposed** collapse the card to inline text; the

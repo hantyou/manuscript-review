@@ -48,9 +48,14 @@ function banner(msg) {
 function setTheme() { const t = view.theme; if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = t; $("#btnTheme").innerHTML = icon(t === "dark" ? "dark" : "light"); $("#btnTheme").title = "Theme: " + t + " (click to change)"; }
 function initChrome() {
   $("#btnMenu").innerHTML = icon("menu"); $("#btnPreview").innerHTML = icon("pdf"); $("#btnState").innerHTML = icon("tune"); $("#btnAi").innerHTML = icon("ai"); $("#icSearch").innerHTML = icon("search");
+  const segIcons = { compare: ["compare", "Compare"], final: ["book", "Read result"] };
+  $$(".seg button").forEach((b) => { const [ic, label] = segIcons[b.dataset.mode]; b.innerHTML = icon(ic) + `<span class="lbl">${label}</span>`; });
+  $("#btnApply").innerHTML = icon("doneAll") + '<span class="lbl">Apply reviewed changes</span>';
   $("#prevPending").innerHTML = icon("prev") + " Previous"; $("#nextPending").innerHTML = "Next pending " + icon("next");
   $("#hideHl").checked = view.hide; $("#srcMode").checked = view.src; $("#changesOnly").checked = view.changes;
   document.body.classList.toggle("nohl", view.hide); setTheme(); applyPanels(); markMode();
+  const bar = $(".appbar");
+  if (bar && window.ResizeObserver) new ResizeObserver(() => document.documentElement.style.setProperty("--appbar", Math.round(bar.getBoundingClientRect().height) + "px")).observe(bar);
   $("#btnSyncSources").onclick = syncAllSources;
   document.addEventListener("pointerdown", (e) => { const b = e.target.closest(".btn,.icon-btn,.seg button"); if (!b || b.disabled) return; const r = b.getBoundingClientRect(); const s = document.createElement("span"); const d = Math.max(r.width, r.height); s.className = "ripple"; s.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px`; b.appendChild(s); setTimeout(() => s.remove(), 600); });
   document.addEventListener("click", (e) => { const a = e.target.closest('a[href^="/api/build/"][target="_blank"]'); if (!a) return; e.preventDefault(); openPdf(a.getAttribute("href")); });
@@ -163,7 +168,7 @@ async function reloadSources(files) {
   } catch (e) { toast(e.message); }
   finally { reloadingSources = false; }
 }
-const unitsOf = (b) => (b.t === "para" ? b.items.filter((x) => x.t === "unit").map((x) => x.id) : b.t === "aux" ? b.units : []);
+const unitsOf = (b) => (b.t === "para" ? b.items.filter((x) => x.t === "unit").map((x) => x.id) : b.units || []);
 
 // ---------- matching and filters ----------
 const FILTERS = [["all", "All"], ["pending", "Pending"], ["decided", "Decided"], ["stale", "Re-review"], ["applied", "Applied"], ["edited", "Edited"], ["differs", "Differs from Git"]];
@@ -293,7 +298,16 @@ function firstVisibleBlock() { for (let j = 0; j < blockEls.length; j++) { const
 function blockEl(i) {
   const b = A.blocks[i]; let el;
   if (b.t === "heading") {
-    el = document.createElement("h2"); el.className = `h l${Math.min(b.level || 1, 4)}`; el.id = "h-" + b.idx; el.dataset.h = b.idx; el.innerHTML = R(b.title);
+    const h = document.createElement("h2"); h.className = `h l${Math.min(b.level || 1, 4)}`; h.id = "h-" + b.idx; h.dataset.h = b.idx;
+    h.innerHTML = b.items && view.mode !== "compare"
+      ? `<span>${b.items.map((it) => (it.t === "text" ? R(it.text) : inlineUnit(it.id))).join("")}</span>`
+      : R(b.title);
+    if (b.units?.length && view.mode === "compare") {
+      const wrap = document.createElement("section"); wrap.className = "h-wrap"; wrap.appendChild(h);
+      const host = document.createElement("div"); host.className = "cards";
+      for (const id of b.units) host.appendChild(unitNode(id));
+      wrap.appendChild(host); el = wrap;
+    } else el = h;
   } else if (b.t === "aux" && b.tikz) {
     el = document.createElement("figure"); el.className = "tikz-block";
     el.innerHTML = `<div class="tikz-frame" data-tikz="${esc(b.tikz.key)}" data-alt="${esc(b.caption || "TikZ figure")}"><span class="tikz-state">Rendering figure…</span></div>${b.caption ? `<figcaption>${R(b.caption)}</figcaption>` : ""}${b.units.length ? '<div class="cards"></div>' : ""}<details class="tikz-src"><summary>${icon("image")}<b>Figure</b><span>LaTeX source</span><span class="spacer"></span><span class="small">${esc(b.file)}:${b.line}</span></summary><pre>${esc(b.src)}</pre></details>`;
@@ -321,6 +335,10 @@ function unitNode(id) {
   if (!c) { const s = document.createElement("span"); s.textContent = "[missing unit]"; return s; }
   const card = (view.mode === "compare" && (!filtering() || cardMatch(c))) || forceCard.has(id);
   if (card && !collapsed.has(id)) return cardEl(id);
+  return inlineUnit(id, c);
+}
+function inlineUnit(id, c = C[id]) {
+  if (!c) { const s = document.createElement("span"); s.textContent = "[missing unit]"; return s; }
   const s = document.createElement("span"); s.className = `u-inline st-${c.status}${collapsed.has(id) ? " collapsed" : ""}`; s.dataset.id = id; s.dataset.unit = id;
   const final = finalText(c);
   // A deletion leaves no proposed text. Show the removed wording struck through
@@ -409,7 +427,10 @@ function setCard(id, d) { C[id] = d; refreshUnit(id); if (id === activeId) rende
 function renderOutline() {
   if (!A) return;
   const per = {}; let h = -1;
-  A.blocks.forEach((b) => { if (b.t === "heading") { h = b.idx; per[h] ||= { p: 0, n: 0 }; } else for (const id of unitsOf(b)) { const k = (per[h] ||= { p: 0, n: 0 }); k.n++; if (["pending", "stale"].includes(C[id]?.status)) k.p++; } });
+  A.blocks.forEach((b) => {
+    if (b.t === "heading") { h = b.idx; per[h] ||= { p: 0, n: 0 }; }
+    for (const id of unitsOf(b)) { const k = (per[h] ||= { p: 0, n: 0 }); k.n++; if (["pending", "stale"].includes(C[id]?.status)) k.p++; }
+  });
   $("#outline").innerHTML = A.headings.map((x) => { const k = per[x.idx] || { p: 0, n: 0 }; return `<div class="o-item l${Math.min(x.level || 1, 3)}" data-h="${x.idx}"><span class="t">${esc(x.title)}</span>${k.n ? `<span class="badge-n ${k.p ? "" : "done"}">${k.p ? k.p : "✓"}</span>` : ""}</div>`; }).join("");
   updateSpy();
 }

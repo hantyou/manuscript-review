@@ -19,21 +19,28 @@
   <div class="app-title"><b id="paperName">Manuscript review</b><span id="baselinePill" class="sub"></span></div>
   <div class="progress" title="Units with a decision"><div class="bar"><span id="progFill"></span></div><span id="progText"></span></div>
   <div class="seg" role="group" aria-label="Reading mode">
-    <button data-mode="compare" title="Show original and proposed wording side by side">Compare</button>
-    <button data-mode="final" title="Read the article with the wording as chosen so far">Read result</button>
+    <button data-mode="compare" title="Show original and proposed wording side by side" aria-label="Compare original and proposed wording">Compare</button>
+    <button data-mode="final" title="Read the article with the wording as chosen so far" aria-label="Read the article with the wording as chosen so far">Read result</button>
   </div>
-  <span class="spacer"></span>
-  <label class="chip-toggle" title="Show only paragraphs that contain a change"><input type="checkbox" id="changesOnly"><span>Changes only</span></label>
-  <label class="chip-toggle" title="Hide word-level highlighting"><input type="checkbox" id="hideHl"><span>Plain</span></label>
-  <label class="chip-toggle" title="Show LaTeX source instead of the readable view"><input type="checkbox" id="srcMode"><span>LaTeX</span></label>
-  <label class="author-pick" id="authorPick" title="Author used for tracked changes" hidden><span class="small">Reviewer</span><select id="changesAuthorTop" aria-label="Tracked-changes author"></select></label>
-  <button class="icon-btn" id="btnTheme" title="Theme"></button>
-  <button class="icon-btn" id="btnPreview" title="PDF previews"></button>
-  <button class="icon-btn" id="btnState" title="Review state, instructions"></button>
-  <button class="btn tonal" id="btnSyncSources" hidden></button>
-  <button class="btn filled" id="btnApply">Apply reviewed changes</button>
-  <button class="icon-btn" id="btnAi" title="AI panel"></button>
-  <span id="saveStatus" class="save" role="status">Loading…</span>
+  <div class="bar-actions">
+    <div class="bar-group" id="chipRow">
+      <label class="chip-toggle" title="Show only paragraphs that contain a change"><input type="checkbox" id="changesOnly"><span>Changes only</span></label>
+      <label class="chip-toggle" title="Hide word-level highlighting"><input type="checkbox" id="hideHl"><span>Plain</span></label>
+      <label class="chip-toggle" title="Show LaTeX source instead of the readable view"><input type="checkbox" id="srcMode"><span>LaTeX</span></label>
+    </div>
+    <label class="author-pick" id="authorPick" title="Author used for tracked changes" hidden><span class="small">Reviewer</span><select id="changesAuthorTop" aria-label="Tracked-changes author"></select></label>
+    <div class="bar-group">
+      <button class="icon-btn" id="btnTheme" title="Theme"></button>
+      <button class="icon-btn" id="btnPreview" title="PDF previews"></button>
+      <button class="icon-btn" id="btnState" title="Review state, instructions"></button>
+    </div>
+    <button class="btn tonal" id="btnSyncSources" hidden></button>
+    <div class="bar-group">
+      <button class="btn filled" id="btnApply" title="Apply reviewed changes" aria-label="Apply reviewed changes">Apply reviewed changes</button>
+      <button class="icon-btn" id="btnAi" title="AI panel"></button>
+    </div>
+    <span id="saveStatus" class="save" role="status">Loading…</span>
+  </div>
 </header>
 <div class="layout">
   <nav id="drawer" aria-label="Outline">

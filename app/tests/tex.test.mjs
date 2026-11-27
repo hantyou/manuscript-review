@@ -252,6 +252,41 @@ test("the stylesheet does not target KaTeX's internal .base spans", async () => 
   assert.ok(/details\.base\s*\{/.test(css));
 });
 
+test("markup inside a section heading is found and flattened", () => {
+  const s = String.raw`\subsection{\replaced{New title}{Old title}}\label{x}`;
+  const n = nodes(s); assert.equal(n.length, 1);
+  assert.equal(flatten(s, "new"), String.raw`\subsection{New title}\label{x}`);
+  assert.equal(flatten(s, "old"), String.raw`\subsection{Old title}\label{x}`);
+});
+
+test("a changed heading keeps the unit in its heading block", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mr-heading-"));
+  try {
+    await fs.writeFile(path.join(dir, "root.tex"), String.raw`\documentclass{article}
+\begin{document}
+\section{Introduction}
+\subsection{\replaced{System and linear measurement model}{Sparsity-aware DOGM problem}}\label{subsec:dogm}
+The section text stays.
+\end{document}
+`);
+    const scan = await scanProject(dir, "root.tex");
+    assert.equal(scan.units.length, 1);
+    const u = scan.units[0];
+    assert.equal(u.kind, "replace");
+    assert.equal(u.orig, "Sparsity-aware DOGM problem");
+    assert.equal(u.prop, "System and linear measurement model");
+    assert.equal(scan.headings[u.heading].title, "System and linear measurement model");
+    const blocks = buildArticle(scan);
+    const block = blocks.find((b) => b.t === "heading" && b.idx === u.heading);
+    assert.ok(block, "the heading must stay a heading block");
+    assert.deepEqual(block.units, [u.id]);
+    assert.ok(block.items.some((i) => i.t === "unit" && i.id === u.id));
+    assert.ok(!blocks.some((b) => b.t === "para" && (b.items || []).some((i) => i.t === "unit" && i.id === u.id)), "the unit must not be duplicated in a paragraph");
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("sentence ranges keep a displayed equation with a period together", () => {
   const src = String.raw`Predictions,\begin{equation}x=a.\end{equation} Next sentence.`;
   const r = sentenceRanges(src);

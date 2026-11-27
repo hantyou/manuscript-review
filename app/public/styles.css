@@ -56,15 +56,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @keyframes rip { to { transform: scale(3.2); opacity: 0; } }
 
 /* App bar */
-.appbar { height: var(--appbar); flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--surface-1); border-bottom: 1px solid var(--outline-soft); z-index: 5; }
-.app-title { display: flex; flex-direction: column; line-height: 1.15; min-width: 120px; max-width: 240px; } .app-title b { font-size: 17px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.appbar { min-height: 64px; flex: none; display: flex; flex-wrap: wrap; align-items: center; align-content: center; column-gap: 8px; row-gap: 4px; padding: 6px 12px; background: var(--surface-1); border-bottom: 1px solid var(--outline-soft); z-index: 5; }
+.app-title { display: flex; flex-direction: column; line-height: 1.15; flex: 0 1 auto; min-width: 96px; max-width: 240px; } .app-title b { font-size: 17px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .app-title .sub { font-size: 11px; color: var(--on-surface-var); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.progress { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--on-surface-var); min-width: 150px; }
+.progress { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--on-surface-var); min-width: 150px; flex: none; }
 .progress .bar { width: 90px; height: 6px; background: var(--surface-3); border-radius: 3px; overflow: hidden; } .progress .bar span { display: block; height: 100%; width: 0; background: var(--ok); transition: width .3s; }
-.seg { display: inline-flex; border: 1px solid var(--outline); border-radius: var(--r-full); overflow: hidden; }
-.seg button { white-space: nowrap; border: 0; background: transparent; padding: 0 14px; height: 34px; cursor: pointer; color: var(--on-surface); font-weight: 500; }
+.seg { display: inline-flex; flex: none; border: 1px solid var(--outline); border-radius: var(--r-full); overflow: hidden; }
+/* Right-hand controls wrap as a group and keep their intrinsic widths, so labels never get clipped. */
+.bar-actions { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+.bar-actions > * { flex: none; }
+.bar-group { display: flex; align-items: center; gap: 8px; }
+.seg button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; border: 0; background: transparent; padding: 0 14px; height: 34px; cursor: pointer; color: var(--on-surface); font-weight: 500; }
 .seg button + button { border-left: 1px solid var(--outline); } .seg button.on { background: var(--secondary-container); color: var(--on-secondary-container); }
 .seg button.on::before { content: "✓ "; }
+.seg button .ic, #btnApply .ic { display: none; width: 18px; height: 18px; }
 .chip-toggle { cursor: pointer; } .chip-toggle input { display: none; }
 .chip-toggle span { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border: 1px solid var(--outline); border-radius: 8px; font-size: 13px; color: var(--on-surface-var); }
 .chip-toggle input:checked + span { background: var(--secondary-container); color: var(--on-secondary-container); border-color: transparent; }
@@ -80,7 +85,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .d-tools { padding: 12px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--outline-soft); }
 .field { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-3); }
 .field input { flex: 1; border: 0; background: transparent; outline: none; min-width: 0; } .field:focus-within { box-shadow: 0 0 0 2px var(--primary); }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; } .row { display: flex; gap: 8px; } .row > * { flex: 1; justify-content: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; } .row { display: flex; gap: 8px; } .row > * { flex: 1 1 auto; justify-content: center; }
 .chip { height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--outline); background: transparent; font-size: 12px; cursor: pointer; color: var(--on-surface-var); }
 .chip.on { background: var(--secondary-container); color: var(--on-secondary-container); border-color: transparent; }
 #outline { overflow: auto; flex: 1; padding: 8px 0; }
@@ -91,7 +96,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .badge-n { font-size: 11px; min-width: 22px; text-align: center; padding: 0 6px; border-radius: 10px; background: var(--warn-container); color: var(--on-warn); }
 .badge-n.done { background: var(--ok-container); color: var(--on-ok); }
 #article { flex: 1; overflow-y: auto; scroll-behavior: smooth; outline: none; background: var(--surface); }
-#doc { max-width: 980px; margin: 0 auto; padding: 24px 28px 160px; }
+#doc { max-width: 1200px; margin: 0 auto; padding: 24px 28px 160px; }
 
 /* Article */
 .h { font-family: var(--serif); font-weight: 600; margin: 36px 0 10px; scroll-margin-top: 16px; display: flex; align-items: baseline; gap: 10px; }
@@ -238,4 +243,7 @@ table.t { border-collapse: collapse; width: 100%; } table.t td, table.t th { bor
 
 @media (max-width: 1280px) { #ai { position: fixed; right: 0; top: var(--appbar); bottom: 0; z-index: 8; box-shadow: var(--shadow3); } }
 @media (max-width: 1200px) { .author-pick { display: none; } }
-@media (max-width: 1000px) { #drawer { position: fixed; left: 0; top: var(--appbar); bottom: 0; z-index: 8; box-shadow: var(--shadow3); } .c-cmp, .ed-grid { grid-template-columns: 1fr; } .progress, .chip-toggle { display: none; } #doc { padding: 16px 14px 120px; } }
+@media (max-width: 1000px) { #drawer { position: fixed; left: 0; top: var(--appbar); bottom: 0; z-index: 8; box-shadow: var(--shadow3); } .c-cmp, .ed-grid { grid-template-columns: 1fr; } .progress, #chipRow { display: none; } #doc { padding: 16px 14px 120px; }
+  .seg button .lbl { display: none; } .seg button .ic { display: inline-block; } .seg button.on::before { content: none; } }
+@media (max-width: 860px) { #btnApply { width: 36px; padding: 0; border-radius: 50%; justify-content: center; } #btnApply .ic { display: inline-block; } #btnApply .lbl { display: none; } }
+@media (max-width: 620px) { .appbar { padding: 6px 8px; } .seg button { padding: 0 10px; } .save { display: none; } }

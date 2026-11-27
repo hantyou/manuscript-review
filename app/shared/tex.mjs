@@ -172,7 +172,14 @@ export function walk(src, on, masked = maskComments(src)) {
       if (m[j] === "{") {
         const e = skipGroup(m, j);
         if (e > 0) {
-          on({ type: "heading", level: HEADINGS[name], title: flatten(src.slice(j + 1, e - 1), "new").replace(/\s+/g, " ").trim(), start: i, end: e });
+          const from = j + 1, to = e - 1;
+          on({ type: "heading", level: HEADINGS[name], title: flatten(src.slice(from, to), "new").replace(/\s+/g, " ").trim(), start: i, end: e, titleRange: [from, to] });
+          // Markup inside the title is a review unit too, as in
+          // \subsection{\replaced{New title}{Old title}}.
+          walk(src.slice(from, to), (ev) => {
+            if (ev.type !== "node") return;
+            on({ ...ev, start: ev.start + from, end: ev.end + from, args: ev.args.map(([a, b]) => [a + from, b + from]) });
+          }, m.slice(from, to));
           i = e; continue;
         }
       }

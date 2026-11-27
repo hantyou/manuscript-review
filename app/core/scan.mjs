@@ -97,7 +97,8 @@ export async function scanProject(projDir, mainRel) {
   const perFile = new Map(); let seqNo = 0;
   for (const e of events) {
     if (e.type === "heading") {
-      headings.push({ idx: headings.length, level: e.level, title: e.title, file: e.file, start: e.start, end: e.end });
+      headings.push({ idx: headings.length, level: e.level, title: e.title, file: e.file, start: e.start, end: e.end,
+        titleStart: e.titleRange?.[0] ?? e.start, titleEnd: e.titleRange?.[1] ?? e.end });
       curHeading = headings.length - 1;
     } else if (e.type === "node") {
       if (!perFile.has(e.file)) perFile.set(e.file, []);
