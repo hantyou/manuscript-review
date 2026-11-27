@@ -107,6 +107,35 @@ async function openReview(context, paperDir, main) {
   panels.set(key, panel);
   sessions.add(state);
 
+  // Saves in VS Code arrive immediately; the server's hash poll stays as the
+  // fallback for other editors, network drives and lost events.
+  const paperRoot = path.resolve(proj.dir);
+  const inPaper = (uri) => {
+    // In a Remote SSH / WSL / Codespaces window the document URI is not "file".
+    if (uri.scheme !== "file" && uri.scheme !== "vscode-remote") return false;
+    if (!/\.(?:tex|bib|aux)$/i.test(uri.fsPath)) return false;
+    const rel = path.relative(paperRoot, path.resolve(uri.fsPath));
+    return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+  };
+  let syncTimer = null;
+  const nudgeSync = () => {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncTimer = null;
+      // /sync hashes first, so a save that changed nothing does not rescan.
+      callApi(srv, "POST", "/sync").catch(() => {});
+    }, 120);
+  };
+  const saveListener = vscode.workspace.onDidSaveTextDocument((doc) => { if (inPaper(doc.uri)) nudgeSync(); });
+  let fileWatcher = null;
+  const watcherListeners = [];
+  try {
+    fileWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(paperRoot), "**/*.{tex,bib}"),
+    );
+    watcherListeners.push(fileWatcher.onDidChange(nudgeSync), fileWatcher.onDidCreate(nudgeSync), fileWatcher.onDidDelete(nudgeSync));
+  } catch { /* the server's poll still covers this paper */ }
+
   const forward = (event) => panel.webview.postMessage({ type: "event", event });
   session.on("event", forward);
 
@@ -131,6 +160,10 @@ async function openReview(context, paperDir, main) {
   });
 
   panel.onDidDispose(async () => {
+    clearTimeout(syncTimer);
+    saveListener.dispose();
+    for (const listener of watcherListeners) listener.dispose();
+    fileWatcher?.dispose();
     panels.delete(key);
     sessions.delete(state);
     session.off("event", forward);

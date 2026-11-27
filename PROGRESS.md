@@ -1,5 +1,12 @@
 # Progress
 
+## 2026-11-27 — Instant source sync after a save
+
+- Reported: after saving `root.tex`, the panel could take noticeably longer than the documented ~2 s to report a source change. The server-side watcher was healthy (hash check ~2 ms, rescan ~36 ms on `Papers/JVer_DOGM`); the delay came from waiting for the next 1.5 s tick and from the client silently deferring the reload while a card edit or dialog is open.
+- Added `POST /api/sync`, which runs `watchSources.tick()` on demand. It still hashes first, so a save that changed nothing stays quiet. The VS Code panel calls it after `onDidSaveTextDocument` for `.tex/.bib/.aux` files in the paper, and also listens to a file-system watcher for `.tex/.bib` (generated `.aux` files stay on the poll, so a running `latexmk` does not churn the panel). The 1.5 s poll remains the fallback for other editors, network drives and lost events.
+- The client now shows the change notice immediately; if a card edit or modal is open it shows a persistent banner saying the re-read will happen when that closes, instead of staying silent. Also fixed a reload race where a scan event arriving during an in-flight reload was dropped.
+- New endpoint test in `app/tests/sync.test.mjs`; 49 tests and `npm run check` pass. Version 0.1.16; packaged and installed locally.
+
 ## 2026-11-27 — Tracked changes in section headings
 
 - Reported on `Papers/JVer_DOGM/root.tex:159`: `\subsection{\replaced{System and linear measurement model}{Sparsity-aware DOGM problem}}` showed only the new title and produced no review card. The walker skipped the whole heading argument, so the nested markup was never a unit.

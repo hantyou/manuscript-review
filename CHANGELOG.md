@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.16
+
+- Pick up a saved `.tex`, `.bib` or `.aux` file immediately in VS Code instead of waiting for the next poll; the 1.5 s hash poll stays as the fallback for other editors, network drives and lost events.
+- Show the "sources changed" notice immediately even when an open card edit or dialog postpones the re-read, and say that the review will re-read the files once that closes.
+- Fix a reload race where a save arriving during an in-flight re-read could be dropped.
+
 ## 0.1.15
 
 - Detect `\added`, `\deleted` and `\replaced` inside sectioning commands such as `\subsection{\replaced{New title}{Old title}}`; they become review cards instead of silently showing only the new title.

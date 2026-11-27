@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { watchSources } from "../core/watch.mjs";
-import { prepareProject } from "../core/open.mjs";
+import { prepareProject, startProject, closeProject } from "../core/open.mjs";
 import { Session } from "../core/session.mjs";
 import { syncUnits } from "../core/model.mjs";
 
@@ -94,6 +94,34 @@ test("an external save is folded into an open session", async () => {
     assert.deepEqual(scans[0].files, ["root.tex"]);
     assert.match([...session.scan.files.values()][0].text, /edited sentence/);
   } finally { w.stop(); }
+});
+
+test("POST /api/sync runs the hash check on demand", async () => {
+  const paper = path.join(process.env.MR_TOOLS_DIR, "paper-sync");
+  await fs.mkdir(paper, { recursive: true });
+  const root = path.join(paper, "root.tex");
+  const doc = (body) => `\\documentclass{article}\n\\begin{document}\n${body}\n\\end{document}\n`;
+  await fs.writeFile(root, doc("The original sentence."));
+
+  const proj = await prepareProject({ dir: paper, main: "root.tex" });
+  const { session, srv } = await startProject(proj, {});
+  const sync = async () => {
+    const url = new URL("/api/sync", srv.url);
+    url.searchParams.set("t", srv.token);
+    const res = await fetch(url, { method: "POST", headers: { "x-mr": "1" } });
+    return { status: res.status, body: await res.json() };
+  };
+  const events = [];
+  session.on("event", (e) => events.push(e));
+  try {
+    assert.deepEqual((await sync()).body, { rescanned: false }, "a no-op save stays quiet");
+    await fs.writeFile(root, doc("The edited sentence."));
+    assert.deepEqual((await sync()).body, { rescanned: true });
+    assert.equal(events.filter((e) => e.type === "scan" && e.auto).length, 1);
+    assert.match([...session.scan.files.values()][0].text, /edited sentence/);
+  } finally {
+    await closeProject({ proj, session, srv });
+  }
 });
 
 test("takeSourceAll refreshes every unit whose source changed", async () => {

@@ -13,6 +13,7 @@ const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; cha
 
 export async function startServer(session, { port = 0, token = crypto.randomBytes(16).toString("hex") } = {}) {
   const sse = new Set();
+  let watcher = null;
   session.on("event", (ev) => { const line = `data: ${JSON.stringify(ev)}\n\n`; for (const r of sse) r.write(line); });
   const katexDir = [
     path.join(HERE, "node_modules", "katex", "dist"),
@@ -72,6 +73,8 @@ export async function startServer(session, { port = 0, token = crypto.randomByte
       if (m === "PUT") { await S.setInstructions((await body(req)).text || ""); return json(res, 200, { ok: true }); }
     }
     if (p === "/status" && m === "GET") return json(res, 200, { changed: await S.externalChanges(), saved: { at: S.review.savedAt, error: S.review.error }, counts: S.project().counts });
+    // Hash-check now (after an editor save) instead of waiting for the next poll.
+    if (p === "/sync" && m === "POST") return json(res, 200, { rescanned: watcher ? await watcher.tick() : false });
     if (p === "/rescan" && m === "POST") { await S.rescan(); return json(res, 200, S.project()); }
     if (p === "/baseline/rebase" && m === "POST") return json(res, 200, await S.rebaseBaseline());
     if (p === "/apply/preview" && m === "POST") { const b = await body(req); const plan = await S.plan(b.mode || "clean"); return json(res, 200, { ...plan, files: plan.files.map((f) => ({ rel: f.rel, shaBefore: f.shaBefore, shaAfter: f.shaAfter })), patches: plan.patches }); }
@@ -132,6 +135,6 @@ export async function startServer(session, { port = 0, token = crypto.randomByte
   await new Promise((r) => server.listen(port, "127.0.0.1", r));
   const actual = server.address().port;
   // Keep the open review in step with saves made in an editor.
-  const watcher = watchSources(session);
+  watcher = watchSources(session);
   return { server, port: actual, token, url: `http://127.0.0.1:${actual}/?t=${token}`, close: () => new Promise((r) => { watcher.stop(); for (const c of sse) c.end(); server.close(r); server.closeAllConnections?.(); }) };
 }

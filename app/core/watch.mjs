@@ -33,6 +33,9 @@ async function sideFiles(session) {
 /**
  * Poll for external edits and rescan when something moved. `rescan` broadcasts
  * {type:"scan", auto:true, files}, which every client already receives.
+ * `tick` is also exposed as POST /api/sync, so an editor can check right after a
+ * save instead of waiting for the next interval. It still hashes first: a save
+ * that changed nothing stays quiet.
  * Returns {tick, stop}; the timer is unref'd so it never holds a process open.
  */
 export function watchSources(session, { intervalMs = 1500, onError } = {}) {

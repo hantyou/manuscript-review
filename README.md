@@ -76,8 +76,11 @@ Keyboard: `j` / `k` or `Alt+↓` / `Alt+↑` next or previous pending change,
 
 Saves you make to the paper in your editor are folded into the open review
 automatically: cards, counts, citations and the conversation follow within about
-two seconds, without pressing **Rescan sources**. The watcher pauses while the
-tool itself writes an apply or undo, and while a card edit or dialog is open.
+two seconds, without pressing **Rescan sources**. In VS Code the check runs as
+soon as the document is saved; other editors and tools are picked up by a 1.5 s
+hash poll. The watcher pauses while the tool itself writes an apply or undo, and
+while a card edit or dialog is open: the notice appears immediately and the
+re-read waits until that closes.
 
 When external edits make several cards report **Source changed**, the top bar
 shows **Update all from source (N)**: one click copies the wording now in the

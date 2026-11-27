@@ -40,9 +40,10 @@ async function afterMutation() {
     catch { setSave("error"); }
   }, 450);
 }
-function banner(msg) {
+function banner(msg, { action = "rescan", actionLabel = "Rescan sources" } = {}) {
   $("#bannerHost")?.remove(); if (!msg) return;
-  const b = document.createElement("div"); b.id = "bannerHost"; b.className = "banner"; b.innerHTML = `<span>${esc(msg)}</span><span class="spacer"></span><button class="btn tonal sm" data-act="rescan">Rescan sources</button><button class="btn text sm" data-act="dismiss">Dismiss</button>`;
+  const b = document.createElement("div"); b.id = "bannerHost"; b.className = "banner";
+  b.innerHTML = `<span>${esc(msg)}</span><span class="spacer"></span>${action ? `<button class="btn tonal sm" data-act="${action}">${esc(actionLabel)}</button>` : ""}<button class="btn text sm" data-act="dismiss">Dismiss</button>`;
   $("#doc").prepend(b);
 }
 function setTheme() { const t = view.theme; if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = t; $("#btnTheme").innerHTML = icon(t === "dark" ? "dark" : "light"); $("#btnTheme").title = "Theme: " + t + " (click to change)"; }
@@ -145,28 +146,46 @@ async function syncAllSources() {
   finally { b.disabled = false; updateSourceSyncButton(); }
 }
 let reloadingSources = false, reloadSourcesTimer = null, lastSourceNote = 0;
+let reloadPending = null, waitingNote = false;
+const sourceList = (files) => (files?.length ? files.join(", ") : "the source files");
+/** Notice a save at once, even when the re-read has to wait for an open edit. */
+function noteSourcesChanged(files, waiting = false) {
+  if (waiting) {
+    if (waitingNote) return;
+    waitingNote = true;
+    banner("Source files changed outside the tool. The review will re-read them when you close the open edit or dialog.", { action: null });
+    toast("Sources changed. Waiting for the open edit or dialog to close.");
+    return;
+  }
+  // Editors with autosave save often; one short note per burst is enough.
+  if (Date.now() - lastSourceNote > 4000) {
+    lastSourceNote = Date.now();
+    toast(`Sources updated (${sourceList(files)}).`);
+  }
+}
 /** The paper was saved outside the tool: re-read it without losing the current card. */
 async function reloadSources(files) {
   // Never discard a card edit or an open dialog; look again a moment later.
   if (openEd.size || !$("#modal").hidden) {
+    noteSourcesChanged(files, true);
     clearTimeout(reloadSourcesTimer);
     reloadSourcesTimer = setTimeout(() => reloadSources(files), 2000);
     return;
   }
-  if (reloadingSources) return;
+  if (reloadingSources) { reloadPending = files; return; }
   reloadingSources = true;
   try {
     const cur = activeId;
     await loadProject(); await loadArticle();
     if (cur && C[cur]) await setActive(cur);
     else { activeId = null; renderAiHead(); renderThread(); }
-    // Editors with autosave save often; one short note per burst is enough.
-    if (Date.now() - lastSourceNote > 4000) {
-      lastSourceNote = Date.now();
-      toast(files?.length ? `Sources changed (${files.join(", ")}). Re-read them.` : "Sources re-read.");
-    }
+    banner(""); waitingNote = false;
+    noteSourcesChanged(files);
   } catch (e) { toast(e.message); }
-  finally { reloadingSources = false; }
+  finally {
+    reloadingSources = false;
+    if (reloadPending) { const next = reloadPending; reloadPending = null; reloadSources(next); }
+  }
 }
 const unitsOf = (b) => (b.t === "para" ? b.items.filter((x) => x.t === "unit").map((x) => x.id) : b.units || []);
 
